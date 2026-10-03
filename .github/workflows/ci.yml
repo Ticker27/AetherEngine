@@ -23,7 +23,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
 
       - name: Verify source, manifest, and JNI structure
         run: python3 scripts/verify_host_structure.py
@@ -44,10 +47,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -63,10 +66,26 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Assemble debug APK
-        run: ./gradlew :android-host:assembleDebug --stacktrace
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew :android-host:assembleDebug --stacktrace --console=plain 2>&1 | tee /tmp/assemble-debug.log || {
+            tail -n 60 /tmp/assemble-debug.log
+            summary="$(tail -n 40 /tmp/assemble-debug.log | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g')"
+            echo "::error title=Gradle assembleDebug failed::$summary"
+            exit 1
+          }
 
       - name: Assemble release APK
-        run: ./gradlew :android-host:assembleRelease --stacktrace
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew :android-host:assembleRelease --stacktrace --console=plain 2>&1 | tee /tmp/assemble-release.log || {
+            tail -n 60 /tmp/assemble-release.log
+            summary="$(tail -n 40 /tmp/assemble-release.log | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g')"
+            echo "::error title=Gradle assembleRelease failed::$summary"
+            exit 1
+          }
 
       - name: Run Android host unit tests
         run: ./gradlew :android-host:test --stacktrace
@@ -107,7 +126,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2

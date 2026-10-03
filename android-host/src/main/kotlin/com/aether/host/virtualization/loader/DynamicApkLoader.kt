@@ -160,11 +160,13 @@ class DynamicApkLoader(
     }
 
     private fun signerDigests(packageInfo: PackageInfo): Set<String> {
-        val signatures: Array<Signature> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            packageInfo.signingInfo?.apkContentsSigners
-        } else {
-            legacySignatures(packageInfo)
-        } ?: emptyArray()
+        val signatures: Array<Signature> = (
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                packageInfo.signingInfo?.apkContentsSigners
+            } else {
+                legacySignatures(packageInfo)
+            }
+        ) ?: emptyArray()
 
         if (signatures.isEmpty()) {
             throw GuestApkLoadException("APK archive has no readable signing certificates")
