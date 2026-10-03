@@ -1,0 +1,10 @@
+[package]
+name = "aether-runtime"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "aether_runtime"
+path = "src/lib.rs"
+
+[dependencies]

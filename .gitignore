@@ -1,0 +1,28 @@
+# Gradle
+.gradle/
+build/
+*/build/
+*/*/build/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+local.properties
+
+# Native
+native/build/
+
+# Rust
+rust/aether-runtime/target/
+rust/aether-runtime/Cargo.lock
+
+# Flutter
+flutter/aether-console/.dart_tool/
+flutter/aether-console/.flutter-plugins*
+flutter/aether-console/.packages
+flutter/aether-console/build/
+flutter/aether-console/pubspec.lock
+
+# OS
+.DS_Store

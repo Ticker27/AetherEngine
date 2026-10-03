@@ -1,0 +1,199 @@
+name: AetherEngine CI
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aether-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  # ------------------------------------------------------------
+  # Repository validation
+  # ------------------------------------------------------------
+
+  structure:
+    name: Repository Structure
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify repository structure
+        shell: bash
+        run: |
+          set -e
+
+          test -d .github/workflows
+          test -d android
+          test -d native
+          test -d rust
+          test -d flutter
+
+          echo "Repository structure OK."
+
+  # ------------------------------------------------------------
+  # Android / Kotlin
+  # ------------------------------------------------------------
+
+  android:
+    name: Android Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Make Gradle executable
+        run: chmod +x ./gradlew
+
+      - name: Build
+        run: ./gradlew build --stacktrace
+
+      - name: Unit tests
+        run: ./gradlew test --stacktrace
+
+  # ------------------------------------------------------------
+  # Native C++
+  # ------------------------------------------------------------
+
+  native:
+    name: Native C++ Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install CMake
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build
+
+      - name: Configure
+        run: |
+          cmake \
+            -S native \
+            -B native/build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build native/build --parallel
+
+      - name: Test
+        run: |
+          cd native/build
+          ctest --output-on-failure
+
+  # ------------------------------------------------------------
+  # Rust
+  # ------------------------------------------------------------
+
+  rust:
+    name: Rust Build & Test
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: rust/aether-runtime
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/aether-runtime/target
+          key: rust-${{ runner.os }}-${{ hashFiles('rust/aether-runtime/Cargo.lock') }}
+          restore-keys: |
+            rust-${{ runner.os }}-
+
+      - name: Check
+        run: cargo check
+
+      - name: Test
+        run: cargo test
+
+      - name: Build
+        run: cargo build --release
+
+  # ------------------------------------------------------------
+  # Flutter
+  # ------------------------------------------------------------
+
+  flutter:
+    name: Flutter Analyze & Test
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: flutter/aether-console
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+  # ------------------------------------------------------------
+  # Final gate
+  # ------------------------------------------------------------
+
+  ci-gate:
+    name: CI Gate
+    runs-on: ubuntu-latest
+
+    needs:
+      - structure
+      - android
+      - native
+      - rust
+      - flutter
+
+    steps:
+      - name: CI passed
+        run: echo "AetherEngine CI PASSED"
