@@ -17,15 +17,15 @@ class NativeService {
   /// Returns structured status for UI
   Future<RuntimeStatus> getStatus() async {
     try {
-      final results = await Future.wait([
+      final results = await Future.wait<String>([
         AetherChannel.version(),
         AetherChannel.state(),
         AetherChannel.ping(),
       ]);
       return RuntimeStatus(
-        version: results[0] as String,
-        state: results[1] as String,
-        ping: results[2] as String,
+        version: results[0],
+        state: results[1],
+        ping: results[2],
         ok: true,
       );
     } catch (e) {
