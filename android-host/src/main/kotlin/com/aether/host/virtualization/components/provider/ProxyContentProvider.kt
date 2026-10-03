@@ -28,7 +28,7 @@ abstract class ProxyContentProvider : ContentProvider() {
         sortOrder: String?,
     ): Cursor {
         dispatch("queried", uri)
-        return MatrixCursor(projection?.toTypedArray() ?: arrayOf("_id"))
+        return MatrixCursor(projection?.map { it }?.toTypedArray() ?: arrayOf("_id"))
     }
 
     override fun getType(uri: Uri): String? {
