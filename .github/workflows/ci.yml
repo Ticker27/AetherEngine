@@ -45,11 +45,18 @@ jobs:
           test -f android-host/src/main/kotlin/com/aether/host/AetherApplication.kt
           test -f android-host/src/main/kotlin/com/aether/host/MainActivity.kt
 
-          # Checkpoint 1: ไฟล์เหล่านี้ห้ามมียัง (Native/JNI/Flutter)
-          ! test -e android-host/src/main/kotlin/com/aether/host/Native.kt
-          ! test -e aether-native
+          # Checkpoint 2: Native.kt (declaration) ได้รับอนุญาต แต่ต้องเป็น declaration เท่านั้น
+          test -f android-host/src/main/kotlin/com/aether/host/Native.kt
+          ! rg -q 'System\.loadLibrary|loadLibrary\(' android-host/src/main/kotlin/com/aether/host/Native.kt
 
-          echo "Repository structure OK (Checkpoint 1 scope)."
+          # ยังห้ามมี native/flutter implementation
+          ! test -e aether-native
+          ! test -e flutter-app
+          ! test -e android-host/src/main/cpp
+          ! test -f android-host/src/main/kotlin/com/aether/host/AetherFlutterHost.kt
+          ! test -f android-host/src/test/kotlin/com/aether/host/NativeContractTest.kt
+
+          echo "Repository structure OK (Checkpoint 2 scope)."
 
   # ------------------------------------------------------------
   # Android / Kotlin
@@ -93,4 +100,4 @@ jobs:
 
     steps:
       - name: CI passed
-        run: echo "AetherEngine CI PASSED (Checkpoint 1)"
+        run: echo "AetherEngine CI PASSED (Checkpoint 2)"
