@@ -19,7 +19,16 @@ native/build/
 rust/aether-runtime/target/
 rust/aether-runtime/Cargo.lock
 
-# Flutter
+# Flutter generated module/build files
+flutter-app/.dart_tool/
+flutter-app/.flutter-plugins
+flutter-app/.flutter-plugins-dependencies
+flutter-app/.packages
+flutter-app/.android/
+flutter-app/.ios/
+flutter-app/build/
+
+# Legacy Flutter app path
 flutter/aether-console/.dart_tool/
 flutter/aether-console/.flutter-plugins*
 flutter/aether-console/.packages

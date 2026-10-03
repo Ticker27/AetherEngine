@@ -21,9 +21,10 @@ The package layout keeps Android component types separate from bootstrap, DEX lo
 ```text
 com.aether.host/
 ├── AetherApplication.kt
-├── MainActivity.kt
-├── AetherFlutterHost.kt
-├── bridge/Native.kt
+├── MainActivity.kt                         # FlutterActivity entry point
+├── bridge/
+│   ├── Native.kt                            # custom libaether.so facade
+│   └── AetherRuntimeChannel.kt              # Flutter MethodChannel handler
 ├── bootstrap/HostInitializer.kt
 └── virtualization/
     ├── activity/
@@ -45,7 +46,8 @@ com.aether.host/
 
 | Component family | Implemented host classes | Purpose and current behavior |
 | --- | --- | --- |
-| Process/bootstrap | `AetherApplication`, `HostInitializer` | Initializes the native host once per process, owns loaded-guest metadata, and publishes proxy lifecycle events |
+| Android/Flutter bootstrap | `AetherApplication`, `MainActivity` (`FlutterActivity`), `HostInitializer` | Initializes the custom native runtime, starts the embedded Flutter/Dart app through the Android embedding, owns guest metadata, and relays proxy lifecycle events |
+| Flutter platform messages | `AetherRuntimeChannel` | Registers `MethodChannel("aether/runtime")` on the Flutter engine and routes supported calls to the host's separate JNI facade |
 | DEX loader | `DynamicApkLoader`, `GuestApkTrustPolicy` | Copies a selected APK into private storage, checks exact package and trusted signer pins, then creates a `DexClassLoader` |
 | Activity | `VirtualActivity`, `ProxyActivityP0..P3`, `ProxyActivityP0_L..P3_L` | Four standard slots and four landscape slots; forwards Activity lifecycle events |
 | Transparent Activity | `TransparentProxyActivityP0..P3` | Four translucent, private slots; no fallback UI is drawn when unattached |

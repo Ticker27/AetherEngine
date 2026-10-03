@@ -16,6 +16,7 @@ REQUIRED_FILES = [
     "android-host/src/main/kotlin/com/aether/host/AetherApplication.kt",
     "android-host/src/main/kotlin/com/aether/host/bootstrap/HostInitializer.kt",
     "android-host/src/main/kotlin/com/aether/host/bridge/Native.kt",
+    "android-host/src/main/kotlin/com/aether/host/bridge/AetherRuntimeChannel.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/loader/DynamicApkLoader.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/loader/GuestApkTrustPolicy.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/activity/VirtualActivity.kt",
@@ -35,6 +36,10 @@ REQUIRED_FILES = [
     "android-host/src/main/kotlin/com/aether/host/virtualization/web/InternalWebBrowser.kt",
     "android-host/src/main/res/xml/aether_file_paths.xml",
     "android-host/src/main/res/values/styles.xml",
+    "android-host/build.gradle.kts",
+    "settings.gradle.kts",
+    "flutter-app/pubspec.yaml",
+    "scripts/verify_apk_architecture.py",
     "docs/host-container.md",
 ]
 
@@ -178,6 +183,34 @@ def main() -> None:
     if re.search(r"<(external-path|external-cache-path|external-files-path|root-path)\b", file_paths):
         fail("FileProvider paths must remain limited to host-owned internal directories")
 
+    flutter_embedding = next(
+        (meta for meta in application.findall("meta-data")
+         if meta.get(f"{ANDROID_NS}name") == "flutterEmbedding"),
+        None,
+    )
+    if flutter_embedding is None or flutter_embedding.get(f"{ANDROID_NS}value") != "2":
+        fail("application must declare Flutter Android embedding v2")
+
+    main_activity = (ROOT / "android-host/src/main/kotlin/com/aether/host/MainActivity.kt").read_text()
+    if not re.search(r"class\s+MainActivity\s*:\s*FlutterActivity", main_activity):
+        fail("launcher MainActivity must use the real FlutterActivity embedding")
+
+    host_gradle = (ROOT / "android-host/build.gradle.kts").read_text()
+    settings_gradle = (ROOT / "settings.gradle.kts").read_text()
+    flutter_pubspec = (ROOT / "flutter-app/pubspec.yaml").read_text()
+    channel_source = (ROOT / "android-host/src/main/kotlin/com/aether/host/bridge/AetherRuntimeChannel.kt").read_text()
+    if 'implementation(project(":flutter"))' not in host_gradle:
+        fail("Android host must depend on the generated Flutter module")
+    if 'flutter-app/.android/include_flutter.groovy' not in settings_gradle:
+        fail("Gradle settings must include the generated Flutter module project")
+    if not re.search(r"(?m)^\s+module:\s*$", flutter_pubspec):
+        fail("flutter-app must declare Flutter module metadata for Add-to-App")
+    if 'const val CHANNEL_NAME = "aether/runtime"' not in channel_source:
+        fail("AetherRuntimeChannel MethodChannel name is missing")
+    dart_channel = (ROOT / "flutter-app/lib/channels/aether_channel.dart").read_text()
+    if "MethodChannel('aether/runtime')" not in dart_channel:
+        fail("Dart and Android MethodChannel names do not match")
+
     native_source = (ROOT / "android-host/src/main/kotlin/com/aether/host/bridge/Native.kt").read_text()
     registry_source = (ROOT / "aether-native/src/main/cpp/jni/native_registry.cpp").read_text()
     if "package com.aether.host.bridge" not in native_source or "object Native" not in native_source:
@@ -185,7 +218,7 @@ def main() -> None:
     if 'com/aether/host/bridge/Native' not in registry_source:
         fail("JNI registry class path does not match the Native Kotlin package")
 
-    print("Host-container structure and manifest registrations are consistent.")
+    print("Host-container, Flutter embedding, JNI, and manifest structures are consistent.")
 
 
 if __name__ == "__main__":

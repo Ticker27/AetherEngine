@@ -1,55 +1,88 @@
 # Runtime and Host Lifecycle
 
-This document distinguishes the lifecycle implemented by the Android host/container from the future Flutter add-to-app lifecycle.
+This document describes the lifecycle currently wired into the Android host, the custom native runtime, the Flutter engine/Dart app, and the separate guest proxy shells.
 
-## Native runtime state machine
+## Custom native runtime state machine
 
 ```text
 NEW → INITIALIZED → RUNNING → STOPPING → STOPPED
 ```
 
-- `NEW`: initial state after library load
-- `INITIALIZED`: `bridge.Native.initialize()` succeeded
-- `RUNNING`: runtime loop started through the C++ state manager
-- `STOPPING`: shutdown is in progress
-- `STOPPED`: terminal state except the native test-only reset path
+- `NEW`: initial state after `libaether.so` is loaded.
+- `INITIALIZED`: `Native.initialize()` succeeded.
+- `RUNNING`: runtime work has been started through the C++ state manager/thread dispatcher.
+- `STOPPING`: shutdown is in progress.
+- `STOPPED`: terminal state except the native test-only reset path.
 
-The JNI wrapper treats initialization while already initialized/running as success. Shutdown is idempotent. The state manager synchronizes transitions and supports state queries.
+JNI initialization is idempotent for an already initialized/running runtime. Shutdown is idempotent. The state manager synchronizes transitions and supports state queries.
 
-## Current host process lifecycle
+## Android process and host Activity
 
 ```text
-Android creates AetherApplication
+Android starts AetherApplication
   └── onCreate()
       └── HostInitializer.initialize()
-          └── Native.initialize() → libaether.so
+          └── custom Native facade → System.loadLibrary("aether")
+              └── libaether.so / JNI_OnLoad / RegisterNatives
 
-MainActivity
-  └── reads HostInitializer/native status and shows host diagnostics
-
-AetherApplication.onTerminate() (best effort only)
-  └── HostInitializer.shutdown()
-      └── Native.shutdown() when the native runtime was ready
+Android launches MainActivity (FlutterActivity)
+  └── Flutter embedding creates/attaches FlutterEngine
+      ├── FlutterJNI loads/initializes libflutter.so
+      ├── engine runs the default Dart entrypoint
+      ├── release build executes Dart AOT from libapp.so
+      └── configureFlutterEngine() attaches AetherRuntimeChannel
 ```
 
-`Application.onTerminate()` is not guaranteed for a production process kill. The host therefore must not depend on it for correctness or persistent guest cleanup.
+The Android app's process is a normal app process. Installing/running the host does not require root. `Application.onTerminate()` is not guaranteed for production process kills, so process correctness must not depend on that callback.
 
-## Guest loading and lifecycle routing
+## Two independent native loading paths
+
+```text
+HostInitializer / AetherRuntimeChannel
+  → com.aether.host.bridge.Native
+  → System.loadLibrary("aether")
+  → libaether.so → JNI_OnLoad() → RegisterNatives()
+
+FlutterActivity / FlutterEngine
+  → FlutterJNI
+  → libflutter.so → Flutter runtime / Dart VM
+  → libapp.so (release AOT)
+```
+
+`FlutterJNI` is owned by the Flutter embedding; it does not pass through Aether's custom JNI registry. The Aether facade owns only the custom `libaether.so` path.
+
+## Flutter platform-message lifecycle
+
+```text
+AetherApp / NativeService
+  ↔ Dart AetherChannel
+  ↔ MethodChannel("aether/runtime")
+  ↔ Flutter engine platform-message transport
+  ↔ AetherRuntimeChannel (Kotlin)
+  ↔ HostInitializer / com.aether.host.bridge.Native
+  ↔ libaether.so
+```
+
+`MainActivity.configureFlutterEngine()` registers the handler before the first Dart frame uses the channel. `cleanUpFlutterEngine()` clears the handler when the Activity detaches. Current methods are `version`, `state`, `initialize`, `shutdown`, and `ping`; link failures and operation errors are returned using stable platform error codes.
+
+Rendering, frame scheduling, semantics, textures, and Flutter runtime services stay in the engine lane unless a feature explicitly sends a platform message.
+
+## Guest DEX loading and proxy lifecycle routing
 
 ```text
 HostInitializer.loadTargetApk(file, trustPolicy)  [worker thread]
-  ├── feature switch DYNAMIC_APK_LOADING must be enabled
+  ├── DYNAMIC_APK_LOADING switch must be enabled
   ├── DynamicApkLoader copies APK into private storage
-  ├── package name + signer pins are verified
+  ├── exact package + signer pins are verified
   └── read-only APK → DexClassLoader → LoadedGuestApk metadata
 
-Android invokes an internal proxy component
-  └── proxy reports created/started/resumed/paused/stopped/destroyed
+Android invokes a declared, internal proxy component
+  └── proxy reports its own Android lifecycle event
       └── HostInitializer.dispatch(HostComponentEvent)
           └── registered HostComponentListener(s)
 ```
 
-The guest loader and Android component lifecycle are deliberately separate. Loading DEX does not cause Android to instantiate an arbitrary guest `Activity` or give it Android framework lifecycle behavior. A compatible guest adapter/component model still needs to be implemented before a normal APK can run as a virtual app. See [The Host container design](host-container.md).
+The guest loader and proxy lifecycle are separate from the embedded Flutter application lifecycle. Loading DEX does not make Android instantiate arbitrary guest components. A compatible guest component/resource/context/task model is still required before a normal third-party APK can run as a virtual app. Loaded guest code has the host UID and permissions; the loader is not a sandbox.
 
 ## Proxy lifecycle events
 
@@ -64,44 +97,12 @@ The guest loader and Android component lifecycle are deliberately separate. Load
 
 Listeners are invoked synchronously. They must avoid long-running work on the main thread and must not retain an Activity/Service instance after its destroy/stop event.
 
-## Flutter lifecycle after add-to-app integration
-
-```text
-AetherApplication / host initializer
-  └── create or retrieve a FlutterEngine
-      ├── FlutterJNI and libflutter.so initialize the engine/runtime
-      ├── register the aether/runtime MethodChannel handler
-      └── execute the selected Dart entrypoint
-          └── load Dart app code (libapp.so in an AOT/release package)
-              └── runApp(AetherApp)
-
-MainActivity
-  ├── attach a Flutter UI / FlutterActivity to the host
-  ├── forward lifecycle as required by the embedding
-  └── detach the Activity view while optionally retaining a warm engine
-```
-
-`AetherFlutterHost` remains a reflection-based compatibility stub while the Flutter Android embedding is absent from Gradle. The final integration should use supported embedding APIs. `FlutterJNI` owns Flutter runtime operations; it is separate from Aether's `bridge.Native` and `libaether.so`.
-
-## Channel lifecycle and message path
-
-```text
-Dart AetherChannel
-  ↔ MethodChannel("aether/runtime")
-  ↔ Flutter engine platform-message transport
-  ↔ Kotlin channel handler (AetherFlutterHost)
-  → com.aether.host.bridge.Native
-  → JNI registration in libaether.so
-```
-
-Current Dart channel methods are `version`, `state`, `initialize`, `shutdown`, and `ping`. In the integrated build, channel handlers must be registered before Dart UI code depends on them. Map native/link errors to stable channel error codes and never pass null where the contract declares a non-null value.
-
 ## Error handling and tests
 
-- `UnsatisfiedLinkError` → stable platform error such as `UNSATISFIED_LINK`
-- Native operation failure → stable `NATIVE_ERROR`; keep internal stack traces out of production messages
-- Unknown MethodChannel method → `notImplemented`
-- Kotlin `String` results declared non-null → always return a valid string from JNI
-- Unit tests cover signer pin validation, feature switches, reflection visibility, and native state transitions
-- CI validates manifest/class consistency, builds debug and release APKs, runs Android/native/Flutter tests, and uploads the APKs
-- Instrumentation tests for real guest Activity attachment are still required once the guest adapter and Android virtualization model exist
+- `UnsatisfiedLinkError` → channel error `UNSATISFIED_LINK`; implementation details stay out of production messages.
+- Native operation failure → channel error `NATIVE_ERROR`.
+- Unknown MethodChannel method → `notImplemented`.
+- Kotlin `String` JNI results declared non-null → always return a valid string.
+- JVM tests cover signer-pin validation, feature switches, reflection visibility, and native state transitions.
+- CI builds debug/release APKs, checks that both native lanes and Flutter assets are packaged, runs Android/native/Flutter tests, and uploads the APKs.
+- Instrumentation tests for real guest Activity attachment remain future work because the guest component model is not implemented.

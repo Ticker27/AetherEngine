@@ -1,7 +1,7 @@
 import 'package:flutter/services.dart';
 
 /// Dart -> Kotlin -> JNI -> C++ bridge
-/// Channel name must match AetherFlutterHost.CHANNEL_NAME = "aether/runtime"
+/// Channel name matches AetherRuntimeChannel.CHANNEL_NAME in the Android host.
 class AetherChannel {
   static const MethodChannel _channel = MethodChannel('aether/runtime');
 

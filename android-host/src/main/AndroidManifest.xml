@@ -10,9 +10,19 @@
         android:hasCode="true"
         android:usesCleartextTraffic="false">
 
+        <!-- Uses the v2 Flutter embedding packaged from flutter-app/.android. -->
+        <meta-data android:name="flutterEmbedding" android:value="2" />
+
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:exported="true"
+            android:hardwareAccelerated="true"
+            android:theme="@style/Theme.Aether"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/Theme.Aether" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

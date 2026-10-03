@@ -5,10 +5,10 @@ import androidx.annotation.Keep
 /**
  * Native contract — JNI bridge to libaether.so
  *
- * Phase 1 Bootstrap:
- * - System.loadLibrary("aether") in init
+ * Aether's custom JNI lane, independent from FlutterJNI/libflutter.so:
+ * - System.loadLibrary("aether") loads libaether.so
  * - JNI_OnLoad -> RegisterNatives
- * - 4 methods grouped: lifecycle (initialize, shutdown), runtime (getVersion, runtimeState)
+ * - Four verified host methods: lifecycle (initialize, shutdown), runtime (getVersion, runtimeState)
  *
  * Thread-safety: native side guards state machine with mutex.
  * No business logic here — pure JNI declaration.
