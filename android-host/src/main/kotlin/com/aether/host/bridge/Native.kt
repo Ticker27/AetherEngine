@@ -1,4 +1,4 @@
-package com.aether.host
+package com.aether.host.bridge
 
 import androidx.annotation.Keep
 

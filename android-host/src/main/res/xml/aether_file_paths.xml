@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Shared file URIs are limited to host-owned subdirectories only. -->
+    <files-path name="shared_files" path="shared/" />
+    <cache-path name="shared_cache" path="shared/" />
+</paths>

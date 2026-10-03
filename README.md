@@ -1,45 +1,71 @@
 # AetherEngine
 
-In-Process Virtualization Engine — Paradigm shift from "observe from outside" to "control from inside".
+Android host process for a Flutter/Dart application with a structured, in-process virtualization container.
 
-Current stage: **Phase 1 Bootstrap — Android → System.loadLibrary("aether") → JNI_OnLoad → RegisterNatives**
+> **Status:** the repository now has a host/bootstrap layer, a signer-pinned DEX loader, and private proxy-component slots. This is a secure **foundation**, not a full Android app sandbox: loaded APK code runs with the host UID/permissions, and arbitrary guest `Activity`/`Service`/`Provider` components are not instantiated automatically. See [The Host container design](docs/host-container.md).
 
-## Structure (Phase 1)
+## Runtime architecture
 
-```
-aether-engine/
-├── android-host/          # Android host (Kotlin)
-│   ├── AetherApplication.kt
-│   ├── MainActivity.kt
-│   ├── AetherFlutterHost.kt (Flutter add-to-app, MethodChannel "aether/runtime")
-│   └── Native.kt (System.loadLibrary + 4 externals)
-│
-├── aether-native/         # Native subsystem (libaether.so)
-│   ├── CMakeLists.txt
-│   └── src/main/cpp/
-│       ├── jni/ (jni_onload.cpp, native_registry.cpp)
-│       ├── bridge/ (engine_bridge, message_bridge)
-│       ├── runtime/ (runtime_state: NEW->INITIALIZED->RUNNING->STOPPING->STOPPED)
-│       ├── platform/ (thread_dispatcher)
-│       └── common/ (logging.h, result.h)
-│
-├── flutter-app/           # Flutter add-to-app module
-│   ├── lib/channels/aether_channel.dart (MethodChannel)
-│   ├── lib/services/native_service.dart
-│   └── lib/features/home/home_page.dart
-│
-├── integration-test/
-│   ├── android/ (NativeContractTest)
-│   ├── flutter/ (aether_channel_test)
-│   └── native/ (runtime_state_test)
-│
-└── docs/
-    ├── architecture.md
-    ├── jni-contract.md
-    └── lifecycle.md
+```text
+AndroidManifest.xml + classes.dex
+              │
+      Android host bootstrap
+        ┌─────┴────────┐
+        │              │
+ HostInitializer    FlutterJNI (target integration)
+        │              │
+ Native facade     libflutter.so
+        │              │
+ libaether.so     Flutter runtime / Dart VM
+                       │
+                libapp.so (AOT)
+                       │
+                Dart application
+
+Proxy Android components ── lifecycle events ──> HostInitializer
+HostInitializer ── trusted, opt-in DEX loading ──> DynamicApkLoader
 ```
 
-## Build
+The binaries have different roles: `libaether.so` is Aether's custom JNI layer, `libflutter.so` is Flutter's runtime, and `libapp.so` is the compiled Dart application. The current Android Gradle host builds `libaether.so`; Flutter embedding and its generated binaries remain a separate integration step.
+
+## Repository layout
+
+```text
+android-host/src/main/kotlin/com/aether/host/
+├── AetherApplication.kt                 # process owner
+├── MainActivity.kt                      # host status screen
+├── AetherFlutterHost.kt                 # optional Flutter reflection adapter
+├── bridge/Native.kt                     # JNI facade (4 registered methods)
+├── bootstrap/HostInitializer.kt         # process + component lifecycle coordinator
+└── virtualization/
+    ├── loader/                          # DynamicApkLoader + signer trust policy
+    ├── activity/                        # VirtualActivity and proxy Activity pools
+    ├── components/
+    │   ├── service/                     # daemon, service, job, and VPN proxies
+    │   ├── provider/                    # FileProvider aliases and provider slots
+    │   └── receiver/                    # broadcast proxy
+    ├── flags/flagger.kt                 # process-local capability switches
+    ├── util/MethodUtils.kt              # visibility-respecting reflection helpers
+    └── web/InternalWebBrowser.kt        # internal HTTPS-only browser
+
+aether-native/                           # C++ source for libaether.so
+flutter-app/                              # Dart source, channels, services, assets
+scripts/verify_host_structure.py         # component/manifest consistency check
+docs/                                     # architecture and implementation contracts
+```
+
+## Current JNI contract
+
+- Kotlin facade: `com.aether.host.bridge.Native`
+- Registered methods: `initialize()`, `shutdown()`, `getVersion()`, `runtimeState()`
+- Registration: `JNI_OnLoad()` → `RegisterNatives()` (no `Java_*` method exports)
+- Library name: `System.loadLibrary("aether")` → `libaether.so`
+
+The APK-analysis target previously described `com.aether.helper.Native` (11 native methods) and `com.aether.helper.flagger` (2 native methods). Those exact JNI declarations are not present here. The new host `flagger` is a **pure Kotlin feature-flag utility** with two methods; it is not a substitute for the reported native API. Exact method names/signatures must be verified before implementing that separate binary contract.
+
+## Build and test
+
+Android/native build (requires JDK 17, Android SDK, NDK, and CMake):
 
 ```bash
 ./gradlew :android-host:assembleDebug
@@ -47,35 +73,36 @@ aether-engine/
 ./gradlew :android-host:test
 ```
 
-ABI: `arm64-v8a` only
+Validate source-to-manifest component registrations:
 
-## JNI Contract
-
-- `Native.kt` declares 4 methods: `initialize()`, `shutdown()`, `getVersion()`, `runtimeState()`
-- `native_registry.cpp` registers via `RegisterNatives()` in `JNI_OnLoad()`
-- Never return null for String methods
-- Method count via `sizeof(kMethods)/sizeof(kMethods[0])`
-- Class path uses `/`: `com/aether/host/Native`
-
-## Flutter Channel
-
-```
-Dart → MethodChannel("aether/runtime") → Kotlin (AetherFlutterHost) → JNI → libaether.so
+```bash
+python3 scripts/verify_host_structure.py
 ```
 
-Methods:
-- `version` -> `Native.getVersion()`
-- `state` -> `Native.runtimeState()` (code challenge implemented)
-- `initialize` -> `Native.initialize()`
-- `shutdown` -> `Native.shutdown()`
-- `ping` -> echo + state
+Run the native runtime-state test (requires `g++`):
 
-## Roadmap
+```bash
+g++ -std=c++17 -I aether-native/src/main/cpp \
+  aether-native/src/main/cpp/runtime/runtime_state.cpp \
+  integration-test/native/runtime_state_test.cpp \
+  -o /tmp/runtime_state_test -pthread
+/tmp/runtime_state_test
+```
 
-- [x] Phase 0: CI skeleton
-- [x] Phase 1: Bootstrap (Native.kt + JNI_OnLoad + RegisterNatives + getVersion + runtimeState)
-- [ ] Phase 2: Native runtime state machine guards + thread_dispatcher
-- [ ] Phase 3: Flutter host (FlutterEngine lifecycle)
-- [ ] Phase 4: Message bridge protocol {requestId, method, payload}
-- [ ] Phase 5: Assets (flutter_assets, libapp.so, libflutter.so)
-- [ ] Phase 6: Testing & diagnostics (ABI arm64-v8a)
+Flutter source checks (requires Flutter SDK; they do not embed Flutter into the Android host):
+
+```bash
+cd flutter-app
+flutter pub get
+flutter analyze
+flutter test
+```
+
+The GitHub Actions workflow runs structure checks, Android debug/release assembly, JVM/native tests, Flutter analysis/tests, and uploads both APK artifacts. Android ABI target: `arm64-v8a`.
+
+## Documentation
+
+- [Host container structure, trust boundaries, and proxy inventory](docs/host-container.md)
+- [Runtime architecture and repository-to-binary mapping](docs/architecture.md)
+- [JNI contract](docs/jni-contract.md)
+- [Android/native/Flutter lifecycle](docs/lifecycle.md)

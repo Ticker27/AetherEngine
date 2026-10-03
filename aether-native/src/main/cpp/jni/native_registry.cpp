@@ -67,21 +67,19 @@ jstring nativeRuntimeState(JNIEnv* env, jobject /*thiz*/) {
     }
 }
 
-// Grouped registration — lifecycle + runtime + diagnostic
-// Total 4 methods now, extensible to 13 as per architecture (3+4+3+3)
+// Current registration table for com.aether.host.bridge.Native.
+// Keep this table in sync with the compiled Kotlin declaration and JNI descriptors.
 JNINativeMethod kMethods[] = {
-    // Lifecycle bindings (3 methods group — 2 now, 1 reserved for start)
+    // Lifecycle bindings
     {"initialize", "()Z", reinterpret_cast<void*>(nativeInitialize)},
     {"shutdown", "()V", reinterpret_cast<void*>(nativeShutdown)},
 
-    // Runtime bindings (3 methods)
+    // Runtime bindings
     {"getVersion", "()Ljava/lang/String;", reinterpret_cast<void*>(nativeGetVersion)},
     {"runtimeState", "()Ljava/lang/String;", reinterpret_cast<void*>(nativeRuntimeState)},
-
-    // Future: Message bindings 4 methods, Diagnostic bindings 3 methods
 };
 
-constexpr char kNativeClass[] = "com/aether/host/Native";
+constexpr char kNativeClass[] = "com/aether/host/bridge/Native";
 
 } // namespace
 
@@ -93,7 +91,7 @@ bool RegisterNativeMethods(JNIEnv* env) {
 
     jclass clazz = env->FindClass(kNativeClass);
     if (clazz == nullptr) {
-        AETHER_LOGE("FindClass failed for com/aether/host/Native — check class path uses '/'");
+        AETHER_LOGE("FindClass failed for com/aether/host/bridge/Native — check class path uses '/'");
         // Exception already pending — clear for logging
         if (env->ExceptionCheck()) {
             env->ExceptionDescribe();

@@ -1,5 +1,6 @@
 package com.aether.host
 
+import com.aether.host.bridge.Native
 import org.junit.Assert.*
 import org.junit.Test
 

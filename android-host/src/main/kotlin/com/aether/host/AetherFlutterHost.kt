@@ -2,6 +2,7 @@ package com.aether.host
 
 import android.content.Context
 import android.util.Log
+import com.aether.host.bridge.Native
 
 /**
  * Flutter add-to-app host — Phase 1 version compiles without Flutter SDK.

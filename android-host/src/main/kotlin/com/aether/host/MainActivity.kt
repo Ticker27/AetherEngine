@@ -5,69 +5,61 @@ import android.os.Bundle
 import android.util.Log
 import android.widget.FrameLayout
 import android.widget.TextView
+import com.aether.host.bridge.Native
 
-/**
- * Activity = lifecycle owner only.
- * No business logic — delegates to AetherFlutterHost in Phase 3.
- *
- * Phase 1: Shows native version and runtime state for bootstrap verification.
- */
+/** Entry point for the host container; guest components run only through private proxies. */
 class MainActivity : Activity() {
-
-    companion object {
-        private const val TAG = "MainActivity"
-    }
-
     private var flutterHost: AetherFlutterHost? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.i(TAG, "MainActivity.onCreate()")
 
-        // Phase 1 verification UI — will be replaced by Flutter in Phase 3
         val root = FrameLayout(this)
         val textView = TextView(this).apply {
             textSize = 14f
             setPadding(32, 64, 32, 32)
-            text = buildDebugInfo()
+            text = buildHostStatus()
         }
         root.addView(textView)
         setContentView(root)
-
-        // Phase 3: attach Flutter
-        // flutterHost = AetherFlutterHost(this)
-        // flutterHost?.attach(this)
     }
 
-    private fun buildDebugInfo(): String {
-        return try {
-            val app = application as? AetherApplication
-            val initResult = app?.tryInitializeNative() ?: run {
-                try {
-                    Native.initialize()
-                } catch (e: Exception) {
-                    false
-                }
-            }
-            val version = try { Native.getVersion() } catch (e: Exception) { "unavailable: ${e.message}" }
-            val state = try { Native.runtimeState() } catch (e: Exception) { "error: ${e.message}" }
-
-            """
-            AetherEngine — Phase 1 Bootstrap
-            ───────────────────────────────
-            initialize() -> $initResult
-            getVersion() -> $version
-            runtimeState() -> $state
-
-            Next: Phase 3 FlutterEngine + MethodChannel("aether/runtime")
-            """.trimIndent()
-        } catch (e: Exception) {
-            "Bootstrap failed: ${e.message}\n${Log.getStackTraceString(e)}"
+    private fun buildHostStatus(): String {
+        val app = application as? AetherApplication
+            ?: return "Aether host application is unavailable"
+        val initialized = app.tryInitializeNative()
+        val initializer = app.hostInitializer
+        val version = try {
+            Native.getVersion()
+        } catch (error: LinkageError) {
+            "unavailable: ${error.message}"
+        } catch (error: Exception) {
+            "unavailable: ${error.message}"
         }
+        val nativeState = try {
+            Native.runtimeState()
+        } catch (error: LinkageError) {
+            "unavailable: ${error.message}"
+        } catch (error: Exception) {
+            "unavailable: ${error.message}"
+        }
+        val guestPackage = initializer.loadedGuest?.packageName ?: "none"
+
+        return """
+            Aether Host Container
+            ────────────────────
+            hostState -> ${initializer.state}
+            initialized -> $initialized
+            nativeVersion -> $version
+            nativeState -> $nativeState
+            loadedGuest -> $guestPackage
+
+            Guest APK loading is disabled by default and requires a trusted signer pin.
+        """.trimIndent()
     }
 
     override fun onDestroy() {
-        Log.i(TAG, "MainActivity.onDestroy()")
         flutterHost?.detach()
         flutterHost = null
         super.onDestroy()
@@ -81,5 +73,9 @@ class MainActivity : Activity() {
     override fun onPause() {
         flutterHost?.onPause()
         super.onPause()
+    }
+
+    companion object {
+        private const val TAG = "MainActivity"
     }
 }
