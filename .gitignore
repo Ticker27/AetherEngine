@@ -3,6 +3,8 @@
 build/
 */build/
 */*/build/
+local.properties
+.kotlin/
 
 # IDE
 .idea/

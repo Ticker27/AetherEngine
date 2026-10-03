@@ -1,18 +1,19 @@
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android") version "2.0.21"
 }
 
 android {
-    namespace = "com.aether.engine.host"
+    namespace = "com.aether.host"
     compileSdk = 34
     buildToolsVersion = "35.0.0"
 
     defaultConfig {
-        applicationId = "com.aether.engine.host"
+        applicationId = "com.aether.host"
         minSdk = 23
         targetSdk = 34
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "0.2.0"
     }
 
     buildTypes {
@@ -26,11 +27,13 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    testOptions {
-        unitTests.isIncludeAndroidResources = false
+    kotlinOptions {
+        jvmTarget = "17"
     }
-}
 
-dependencies {
-    testImplementation("junit:junit:4.13.2")
+    sourceSets {
+        getByName("main") {
+            kotlin.srcDir("src/main/kotlin")
+        }
+    }
 }

@@ -38,12 +38,18 @@ jobs:
           set -e
 
           test -d .github/workflows
-          test -d android
-          test -d native
-          test -d rust
-          test -d flutter
+          test -d android-host
 
-          echo "Repository structure OK."
+          test -f android-host/build.gradle.kts
+          test -f android-host/src/main/AndroidManifest.xml
+          test -f android-host/src/main/kotlin/com/aether/host/AetherApplication.kt
+          test -f android-host/src/main/kotlin/com/aether/host/MainActivity.kt
+
+          # Checkpoint 1: ไฟล์เหล่านี้ห้ามมียัง (Native/JNI/Flutter)
+          ! test -e android-host/src/main/kotlin/com/aether/host/Native.kt
+          ! test -e aether-native
+
+          echo "Repository structure OK (Checkpoint 1 scope)."
 
   # ------------------------------------------------------------
   # Android / Kotlin
@@ -67,114 +73,11 @@ jobs:
       - name: Make Gradle executable
         run: chmod +x ./gradlew
 
-      - name: Build
-        run: ./gradlew build --stacktrace
-
-      - name: Unit tests
-        run: ./gradlew test --stacktrace
-
-  # ------------------------------------------------------------
-  # Native C++
-  # ------------------------------------------------------------
-
-  native:
-    name: Native C++ Build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install CMake
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake ninja-build
-
-      - name: Configure
-        run: |
-          cmake \
-            -S native \
-            -B native/build \
-            -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release
-
-      - name: Build
-        run: cmake --build native/build --parallel
+      - name: Build (assembleDebug)
+        run: ./gradlew :android-host:assembleDebug --stacktrace
 
       - name: Test
-        run: |
-          cd native/build
-          ctest --output-on-failure
-
-  # ------------------------------------------------------------
-  # Rust
-  # ------------------------------------------------------------
-
-  rust:
-    name: Rust Build & Test
-    runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: rust/aether-runtime
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            rust/aether-runtime/target
-          key: rust-${{ runner.os }}-${{ hashFiles('rust/aether-runtime/Cargo.lock') }}
-          restore-keys: |
-            rust-${{ runner.os }}-
-
-      - name: Check
-        run: cargo check
-
-      - name: Test
-        run: cargo test
-
-      - name: Build
-        run: cargo build --release
-
-  # ------------------------------------------------------------
-  # Flutter
-  # ------------------------------------------------------------
-
-  flutter:
-    name: Flutter Analyze & Test
-    runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: flutter/aether-console
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Dependencies
-        run: flutter pub get
-
-      - name: Analyze
-        run: flutter analyze
-
-      - name: Test
-        run: flutter test
+        run: ./gradlew :android-host:test --stacktrace
 
   # ------------------------------------------------------------
   # Final gate
@@ -187,10 +90,7 @@ jobs:
     needs:
       - structure
       - android
-      - native
-      - rust
-      - flutter
 
     steps:
       - name: CI passed
-        run: echo "AetherEngine CI PASSED"
+        run: echo "AetherEngine CI PASSED (Checkpoint 1)"

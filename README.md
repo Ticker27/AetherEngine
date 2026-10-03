@@ -1,14 +1,19 @@
 # AetherEngine
 
-PHASE 0 — CI Skeleton monorepo: Android host + Native C++ (CMake) + Rust runtime + Flutter console.
+Flutter add-to-app + custom JNI bridge (planned). Current stage: **Checkpoint 1 — Android Host Skeleton**.
 
-CI: GitHub Actions (`.github/workflows/ci.yml`) gates every push/PR to `main`:
+## Structure (Checkpoint 1)
 
-- `structure` — repository layout check
-- `android` — Gradle build + unit tests (JDK 17)
-- `native` — CMake/Ninja build + ctest
-- `rust` — cargo check/test/build
-- `flutter` — flutter pub get/analyze/test
-- `ci-gate` — final pass/fail gate
+- `android-host/` — Android host (Kotlin): `AetherApplication` (Application), `MainActivity` (launcher Activity)
+- `.github/workflows/ci.yml` — CI gate: structure check + assembleDebug + test
 
-See CI contract and Definition of Done in the project docs. Release/signing/deployment are out of scope for PHASE 0.
+## Roadmap
+
+1. Checkpoint 1 — Android Host Skeleton ✅ (current)
+2. Native bootstrap — `Native.kt`, `System.loadLibrary("aether")`, `JNI_OnLoad`, `RegisterNatives`
+3. Native runtime state — NEW → INITIALIZED → RUNNING → STOPPING → STOPPED
+4. Flutter host — FlutterEngine (add-to-app), `MethodChannel("aether/runtime")`
+5. Message bridge protocol
+6. Assets & testing (ABI arm64-v8a)
+
+Scope discipline: each checkpoint lands only its own files; Native/JNI/Flutter artifacts are explicitly excluded until their checkpoint is approved.

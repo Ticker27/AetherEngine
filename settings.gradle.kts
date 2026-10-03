@@ -16,5 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "AetherEngine"
 
-include(":android:host")
-project(":android:host").projectDir = file("android/host")
+include(":android-host")
