@@ -152,6 +152,15 @@ jobs:
             -o /tmp/runtime_state_test -pthread
           /tmp/runtime_state_test
 
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: aether-apks
+          path: |
+            android-host/build/outputs/apk/debug/android-host-debug.apk
+            android-host/build/outputs/apk/release/android-host-release-unsigned.apk
+          if-no-files-found: error
+
   # ------------------------------------------------------------
   # Flutter
   # ------------------------------------------------------------
