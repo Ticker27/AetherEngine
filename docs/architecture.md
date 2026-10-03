@@ -135,7 +135,7 @@ AetherEngine/
 | `assets/flutter_assets/` | Flutter build tooling | Present in debug and release APK |
 | `lib/arm64-v8a/libapp.so` | Flutter AOT compilation | Required in release APK |
 
-The supported ABI is currently `arm64-v8a` only.
+The supported ABI is currently `arm64-v8a` only. The Flutter 3.47 engine requires minimum Android API 24 (Android 7.0), reflected in the host `minSdk`.
 
 ## Intended target JNI contract vs verified repository contract
 

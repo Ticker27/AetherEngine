@@ -89,7 +89,7 @@ flutter analyze
 flutter test
 ```
 
-The release APK is unsigned by this CI build and must be signed for distribution. GitHub Actions uploads debug and release APKs as a run artifact. The supported ABI is currently `arm64-v8a`.
+The release APK is unsigned by this CI build and must be signed for distribution. GitHub Actions uploads debug and release APKs as a run artifact. The supported ABI is currently `arm64-v8a`; the Flutter 3.47 engine sets the minimum Android API to 24 (Android 7.0).
 
 ## Documentation
 
