@@ -1,13 +1,54 @@
 package com.aether.host
 
+import androidx.annotation.Keep
+
 /**
- * Native contract declaration (Checkpoint 2)
+ * Native contract — JNI bridge to libaether.so
  *
- * ประกาศ contract เท่านั้น — ยังไม่มี native implementation
- * - ห้าม System.loadLibrary() ในรอบนี้ (จะเพิ่มใน Checkpoint ถัดไปพร้อม libaether.so)
- * - ห้ามเรียก initialize() จาก Application/MainActivity — ยังไม่มี .so รองรับ
- *   (การเรียกจะ throw UnsatisfiedLinkError ตอน runtime)
+ * Phase 1 Bootstrap:
+ * - System.loadLibrary("aether") in init
+ * - JNI_OnLoad -> RegisterNatives
+ * - 4 methods grouped: lifecycle (initialize, shutdown), runtime (getVersion, runtimeState)
+ *
+ * Thread-safety: native side guards state machine with mutex.
+ * No business logic here — pure JNI declaration.
  */
+@Keep
 object Native {
+
+    init {
+        System.loadLibrary("aether")
+    }
+
+    /**
+     * Lifecycle: NEW -> INITIALIZED
+     * Returns false if already initialized or native init fails.
+     */
+    @Keep
+    @JvmStatic
     external fun initialize(): Boolean
+
+    /**
+     * Lifecycle: INITIALIZED/RUNNING -> STOPPING -> STOPPED
+     * Idempotent — safe to call multiple times.
+     */
+    @Keep
+    @JvmStatic
+    external fun shutdown()
+
+    /**
+     * Runtime diagnostic — never returns null.
+     */
+    @Keep
+    @JvmStatic
+    external fun getVersion(): String
+
+    /**
+     * Runtime state query — returns one of:
+     * "new", "initialized", "running", "stopping", "stopped"
+     * Never returns null.
+     */
+    @Keep
+    @JvmStatic
+    external fun runtimeState(): String
 }
