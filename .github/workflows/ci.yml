@@ -88,7 +88,7 @@ jobs:
           set -o pipefail
           ./gradlew :android-host:assembleDebug --stacktrace --console=plain 2>&1 | tee /tmp/assemble-debug.log || {
             tail -n 60 /tmp/assemble-debug.log
-            diagnostics="$(grep -E '(^e:|error:|^\* What went wrong:|^Execution failed)' /tmp/assemble-debug.log | tail -n 40 || true)"
+            diagnostics="$(grep -iE '(^e:|error|failed|conflict|manifest merger|aapt|uses-sdk|suggestion|what went wrong|execution failed)' /tmp/assemble-debug.log | tail -n 40 || true)"
             if [[ -z "$diagnostics" ]]; then diagnostics="$(tail -n 20 /tmp/assemble-debug.log)"; fi
             summary="$(printf '%s' "$diagnostics" | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g')"
             echo "::error title=Gradle assembleDebug failed::$summary"
@@ -101,7 +101,7 @@ jobs:
           set -o pipefail
           ./gradlew :android-host:assembleRelease --stacktrace --console=plain 2>&1 | tee /tmp/assemble-release.log || {
             tail -n 60 /tmp/assemble-release.log
-            diagnostics="$(grep -E '(^e:|error:|^\* What went wrong:|^Execution failed)' /tmp/assemble-release.log | tail -n 40 || true)"
+            diagnostics="$(grep -iE '(^e:|error|failed|conflict|manifest merger|aapt|uses-sdk|suggestion|what went wrong|execution failed)' /tmp/assemble-release.log | tail -n 40 || true)"
             if [[ -z "$diagnostics" ]]; then diagnostics="$(tail -n 20 /tmp/assemble-release.log)"; fi
             summary="$(printf '%s' "$diagnostics" | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g')"
             echo "::error title=Gradle assembleRelease failed::$summary"
