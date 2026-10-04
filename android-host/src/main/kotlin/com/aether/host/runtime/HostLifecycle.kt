@@ -4,7 +4,7 @@ import android.util.Log
 import com.aether.host.bootstrap.HostComponentEvent
 import com.aether.host.bootstrap.HostComponentKind
 import com.aether.host.bootstrap.HostComponentListener
-import com.aether.host.bootstrap.HostInitializer
+import com.aether.host.bootstrap.HostRuntimeInitializer
 
 /**
  * HostLifecycle — relays proxy component lifecycle events into the host's
@@ -17,9 +17,9 @@ import com.aether.host.bootstrap.HostInitializer
 object HostLifecycle {
     private const val TAG = "HostLifecycle"
     @Volatile
-    private var attachedTo: HostInitializer? = null
+    private var attachedTo: HostRuntimeInitializer? = null
 
-    fun attach(initializer: HostInitializer) {
+    fun attach(initializer: HostRuntimeInitializer) {
         if (attachedTo != null) return
         attachedTo = initializer
         initializer.addComponentListener(Listener)

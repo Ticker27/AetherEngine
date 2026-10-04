@@ -53,7 +53,7 @@ enum class HostInitializerState {
  * and proxy-component lifecycle events. This is not an Android sandbox: any loaded guest
  * executes with the host process identity and permissions.
  */
-class HostInitializer(application: Application) {
+class HostInitializer(application: Application) : HostRuntimeInitializer {
     private val appContext = application.applicationContext
     private val listeners = CopyOnWriteArraySet<HostComponentListener>()
 
@@ -66,7 +66,7 @@ class HostInitializer(application: Application) {
         private set
 
     @Synchronized
-    fun initialize(): Boolean {
+    override fun initialize(): Boolean {
         when (state) {
             HostInitializerState.READY -> return true
             HostInitializerState.STOPPED -> return false
@@ -122,11 +122,11 @@ class HostInitializer(application: Application) {
         return guest
     }
 
-    fun addComponentListener(listener: HostComponentListener) {
+    override fun addComponentListener(listener: HostComponentListener) {
         listeners += listener
     }
 
-    fun removeComponentListener(listener: HostComponentListener) {
+    override fun removeComponentListener(listener: HostComponentListener) {
         listeners -= listener
     }
 
@@ -147,7 +147,7 @@ class HostInitializer(application: Application) {
     }
 
     @Synchronized
-    fun shutdown() {
+    override fun shutdown() {
         if (state == HostInitializerState.STOPPED) return
         loadedGuest?.let { guest ->
             dispatch(

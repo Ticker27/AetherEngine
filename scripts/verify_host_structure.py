@@ -15,6 +15,7 @@ MANIFEST_PATH = ROOT / "android-host/src/main/AndroidManifest.xml"
 REQUIRED_FILES = [
     "android-host/src/main/kotlin/com/aether/host/AetherApplication.kt",
     "android-host/src/main/kotlin/com/aether/host/bootstrap/HostInitializer.kt",
+    "android-host/src/main/kotlin/com/aether/host/bootstrap/HostRuntimeInitializer.kt",
     "android-host/src/main/kotlin/com/aether/host/bridge/Native.kt",
     "android-host/src/main/kotlin/com/aether/host/bridge/AetherRuntimeChannel.kt",
     "android-host/src/main/kotlin/com/aether/host/target/TargetApkContract.kt",

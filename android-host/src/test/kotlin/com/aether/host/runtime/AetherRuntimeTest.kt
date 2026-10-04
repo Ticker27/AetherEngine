@@ -1,19 +1,19 @@
 package com.aether.host.runtime
 
-import android.app.Application
+import android.content.Context
 import com.aether.host.bootstrap.HostComponentListener
-import com.aether.host.bootstrap.HostInitializer
+import com.aether.host.bootstrap.HostRuntimeInitializer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mockito.Mockito
 
 class AetherRuntimeTest {
 
     private class FakeHostInitializer(
-        delegate: HostInitializer = HostInitializer(FakeApplication()),
         var initResult: Boolean = true,
-    ) : HostInitializer by delegate {
+    ) : HostRuntimeInitializer {
         var initCalls = 0
         var shutdownCalls = 0
         val listeners = mutableListOf<HostComponentListener>()
@@ -25,7 +25,6 @@ class AetherRuntimeTest {
 
         override fun shutdown() {
             shutdownCalls++
-            delegate.shutdown()
         }
 
         override fun addComponentListener(listener: HostComponentListener) {
@@ -37,10 +36,12 @@ class AetherRuntimeTest {
         }
     }
 
-    private class FakeApplication : Application()
+    private fun fakeContext(): Context = Mockito.mock(Context::class.java).also { context ->
+        Mockito.`when`(context.applicationContext).thenReturn(context)
+    }
 
     private fun freshRuntime(): AetherRuntime {
-        AetherRuntime.shutdown()
+        AetherRuntime.resetForTesting()
         return AetherRuntime
     }
 
@@ -50,9 +51,8 @@ class AetherRuntimeTest {
         val fake = FakeHostInitializer()
         AetherRuntime.initializerProvider = { fake }
 
-        val context = FakeApplication()
-        assertTrue(runtime.bootstrap(context))
-        assertEquals(RuntimeState.READY, runtime.state)
+        assertTrue(runtime.bootstrap(fakeContext()))
+        assertEquals(AetherRuntime.RuntimeState.READY, runtime.state)
         assertEquals(
             listOf(AetherRuntime.Module.LOADER, AetherRuntime.Module.NATIVE, AetherRuntime.Module.HOST),
             runtime.registeredModules()
@@ -65,7 +65,7 @@ class AetherRuntimeTest {
         val runtime = freshRuntime()
         val fake = FakeHostInitializer()
         AetherRuntime.initializerProvider = { fake }
-        val context = FakeApplication()
+        val context = fakeContext()
 
         assertTrue(runtime.bootstrap(context))
         assertTrue(runtime.bootstrap(context))
@@ -78,8 +78,8 @@ class AetherRuntimeTest {
         val fake = FakeHostInitializer(initResult = false)
         AetherRuntime.initializerProvider = { fake }
 
-        assertFalse(runtime.bootstrap(FakeApplication()))
-        assertEquals(RuntimeState.FAILED, runtime.state)
+        assertFalse(runtime.bootstrap(fakeContext()))
+        assertEquals(AetherRuntime.RuntimeState.FAILED, runtime.state)
         assertEquals(listOf(AetherRuntime.Module.LOADER), runtime.registeredModules())
     }
 
@@ -88,12 +88,11 @@ class AetherRuntimeTest {
         val runtime = freshRuntime()
         val fake = FakeHostInitializer()
         AetherRuntime.initializerProvider = { fake }
-        val context = FakeApplication()
 
-        assertTrue(runtime.bootstrap(context))
+        assertTrue(runtime.bootstrap(fakeContext()))
         runtime.shutdown()
 
-        assertEquals(RuntimeState.STOPPED, runtime.state)
+        assertEquals(AetherRuntime.RuntimeState.STOPPED, runtime.state)
         assertEquals(1, fake.shutdownCalls)
         assertTrue(runtime.registeredModules().isEmpty())
         assertTrue(fake.listeners.isEmpty())

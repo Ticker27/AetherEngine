@@ -3,7 +3,7 @@ package com.aether.host.runtime
 import android.content.Context
 import android.util.Log
 import com.aether.host.bootstrap.HostInitializer
-import com.aether.host.bootstrap.HostInitializerState
+import com.aether.host.bootstrap.HostRuntimeInitializer
 import com.aether.host.virtualization.flags.HostFeature
 import com.aether.host.virtualization.flags.flagger
 
@@ -91,13 +91,24 @@ object AetherRuntime {
         Log.i(TAG, "shutdown: sequence complete")
     }
 
-    internal var initializerProvider: () -> HostInitializer = {
+    private val defaultInitializerProvider: () -> HostRuntimeInitializer = {
         val ctx = checkNotNull(bootContext) { "bootstrap context must not be null" }
         (ctx.applicationContext as? com.aether.host.AetherApplication)?.hostInitializer
             ?: HostInitializer(ctx.applicationContext as android.app.Application)
     }
 
-    private fun runtimeInitializer(): HostInitializer = initializerProvider()
+    internal var initializerProvider: () -> HostRuntimeInitializer = defaultInitializerProvider
+
+    private fun runtimeInitializer(): HostRuntimeInitializer = initializerProvider()
+
+    @Synchronized
+    internal fun resetForTesting() {
+        HostLifecycle.detach()
+        registeredModules.clear()
+        bootContext = null
+        state = RuntimeState.NEW
+        initializerProvider = defaultInitializerProvider
+    }
 
     private fun fail(module: String, error: Throwable): Boolean {
         state = RuntimeState.FAILED
