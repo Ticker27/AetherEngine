@@ -1,7 +1,7 @@
 # Guest Container Specification (Phase 2 / M0.1)
 
 Status: **draft contract — no code ships with this document** · Date: 2026-10-04 ·
-Milestone: Phase 2 M0.1 · Base: `main` @ `630c474`
+Milestone: Phase 2 M0.1 (+ M0.2 Spike A resolved, §3.1) · Base: `main` @ `630c474`
 
 This document fixes the contracts that Phase 2 milestones M1–M5 implement: which objects
 exist, who owns them, which thread each operation runs on, how guest lifecycle events flow,
@@ -36,7 +36,8 @@ HostInitializer  ──owns──►  guest session (one at a time)
     ├── GuestSlotScheduler   ──books──►  proxy slot (VirtualActivitySlotRegistry snapshots)
     ├── GuestRuntimeAdapter  ──binds──►  guest Application + Activity inside one booked slot
     ├── GuestPackage         ──model──►  parsed/persisted manifest of one verified APK
-    └── GuestContext         ──facade─►  GuestPackage + GuestVirtualFileSystem + GuestClassLoaderProxy + resources
+    ├── GuestContext         ──facade─►  GuestPackage + GuestVirtualFileSystem + GuestClassLoaderProxy + resources
+    └── GuestAssetArchive    ──reads───►  assets/** inside the verified read-only cached APK (§3.1)
 ```
 
 **Ownership invariants (all milestones must preserve these)**
@@ -102,13 +103,85 @@ a partial `Context` would fail at runtime in ways a `ContextWrapper` cannot.
 | `getPackageName()` | `GuestPackage.packageName` | Returns the guest name; the host package name is never returned to guest code. This is a data substitution, not package-manager spoofing (§10). |
 | `getApplicationInfo()` / `getApplicationInfo()` | `GuestPackage` + `ApplicationInfo` built from it | `sourceDir`/`publicSourceDir` point at the verified read-only cached APK; `dataDir`/`deviceProtectedDataDir` at the guest VFS roots; the host UID/permissions are inherited and **not** rewritten. |
 | `getClassLoader()` | `GuestClassLoaderProxy` | Parent-first prefixes unchanged. |
-| `getAssets()`, `getResources()` | Spike A decision (§11) | Either the guest's own resource table, or the documented fallback: host resources with guest assets served through `GuestVirtualFileSystem`. Whichever is chosen is recorded here and in [architecture.md](architecture.md) before M3 starts. |
+| `getAssets()`, `getResources()` | host `Resources` + `GuestAssetArchive` (§3.1) | **Decided by Spike A.** Guest `resources.arsc` is not loaded and guest resource ids are not mapped, so `getResources()` returns host resources. Guest **assets** are read from the verified cached APK by path through `GuestAssetArchive`; guest code calling `getAssets()` itself still reaches host assets (see §3.1 for why that cannot be repointed publicly). |
 | `getFilesDir()`, `getCacheDir()`, `getCodeCacheDir()`, `getNoBackupFilesDir()`, `getDatabasePath()`, `getSharedPreferencesPath()` | `GuestVirtualFileSystem` | Every returned path lies below the guest root; `..`, absolute paths, and symlinks are rejected by the facade, never re-implemented. |
 | `getPackageManager()`, `getPackageInfo()` | **not virtualized** | Return host-package data. Recorded limitation; guests that depend on real package visibility are unsupported in Phase 2 (§10). |
 | `getSystemService()` | host | Real host services. Documented consequence: a guest sees the host's services, which is part of the "not a sandbox" statement, not a feature. |
 
 `GuestContext` is created once per session, on a worker thread, and is then read-only.
 It is never re-parented into a different session, and never shared between slots.
+
+### 3.1 Spike A decision record — guest resource & asset loading (M0.2, resolved 2026-10-04)
+
+**Question.** How does the host give guest code the resources and assets of a verified APK that
+is *not* installed, without opening the APK for installation and without violating the
+no-hidden-API stance in [host-container.md](host-container.md)?
+
+**Method and its limits.** This spike had no device or emulator available (the sandbox has no
+JDK/Android SDK, and plan §6 input #4 — test device details — is still missing), so no runtime
+measurement was taken. Instead the three options were settled on API-surface evidence (AOSP
+source + Google's published non-SDK policy) plus measurements of the verified target APK
+container and a sample of its DEX. Because options (a) and (b) are eliminated on API-surface
+grounds rather than on runtime behaviour, the recommendation does not depend on the deferred
+on-device run; that run stays recorded as a follow-up in §11.
+
+**Evidence**
+
+| # | Finding | Source |
+| --- | --- | --- |
+| E1 | `AssetManager` is a **`public final class`** — it cannot be subclassed, so a "custom asset manager" cannot be written. | AOSP `frameworks/base/core/java/android/content/res/AssetManager.java` |
+| E2 | Its public constructor is `@hide` + `@UnsupportedAppUsage`, documented "Not for use by applications". | same, `public AssetManager()` |
+| E3 | `addAssetPath(String)` is `@Deprecated @UnsupportedAppUsage` and `@hide`-documented; its replacement `setApkAssets(ApkAssets[], boolean)` is also `@hide`, and `ApkAssets` is a hidden type. | same, both methods |
+| E4 | The resource-lookup helpers on `AssetManager` (`getResourceValue`, `getResourceName`, `getResourceIdentifier`, …) are package-private / `@hide` — the host cannot even query guest resource ids through public API. | same, method declarations |
+| E5 | `Resources(AssetManager, DisplayMetrics, Configuration)` is public but useless without a guest-bound `AssetManager`; the supported way to build guest `Resources` (`ResourcesManager` + idmap) is hidden on every supported release. | AOSP `Resources`/`ResourcesManager` |
+| E6 | `Context.createPackageContext(String, int)` is public but resolves an **installed** package (`NameNotFoundException` otherwise), so it cannot serve an uninstalled APK. Excluded by design: the host does not install the guest and does not spoof the package manager (§10). | Android `Context` API reference |
+| E7 | `PackageManager.getPackageArchiveInfo` — already used by `DynamicApkLoader` — returns metadata (`PackageInfo`/`ApplicationInfo`) only; it never yields `Resources` or `AssetManager`. | existing host usage + API reference |
+| E8 | Non-SDK policy: `unsupported` members are callable today but may move into `max-target-x` lists and then the blocklist, where access throws (`NoSuchMethodError`/…). The host is `targetSdk 34` / `compileSdk 36`, so non-SDK use is a live breakage risk, not a contract. | Android "Restrictions on non-SDK interfaces" |
+| E9 | Target container: `resources.arsc` 2.64 MB; `res/` 2 457 entries (1 426 compiled AXML, 1 010 PNG); `assets/` 3 018 entries / 61.6 MB excluding `.so`; `lib/` 38 entries / 176 MB. | measured on `local/target-apk/8bp-56.30.0-4028.apk` (gitignored) |
+| E10 | In the 11 committed DEX files (40.6 MB of 22), `getResources` appears 14×, `AssetManager` 12×, `getAssets` 7×, and no `assets/unpack` path or `System.loadLibrary` string appears — Java-level asset use is small next to a native engine that consumes content by file path. | measured on `docs/classes*.dex` (partial sample by design) |
+
+**Options evaluated**
+
+| Option | Verdict | Why |
+| --- | --- | --- |
+| (a) Public resource path for an uninstalled APK | **Rejected — does not exist** | E1–E7: the only public routes all require the package to be installed, and the one object that could carry a path (`AssetManager`) can neither be constructed nor subclassed through public API. |
+| (b) `AssetManager.addAssetPath` (plus the hidden constructor) | **Rejected for Phase 2** | Requires three hidden surfaces (constructor, `addAssetPath`/`setApkAssets`, `ApkAssets`) and, for guest *resources*, hidden `ResourcesManager`/idmap machinery (E2–E5). It directly contradicts non-goal 2, is unstable at `targetSdk 34`+ (E8), and still does not give guest code a repointable `getAssets()` because the class is `final` (E1). |
+| (c) Fallback: host resources + guest assets read from the verified cached APK | **Chosen** | Uses only public API (`java.util.zip.ZipFile` over the APK that `DynamicApkLoader` already copied, verified and made read-only). Keeps the no-hidden-API stance, is testable off-device with JVM tests, and covers the asset half of the problem for host-mediated reads. |
+
+**Chosen approach and new components (M2)**
+
+- **`GuestAssetArchive`** — public `ZipFile` over the verified, read-only cached APK, opened only
+  for a digest already accepted by `GuestApkTrustPolicy`. Only `assets/**` is exposed. Rejects
+  absolute paths, `..` components, and any entry outside `assets/`. API:
+  `openAsset(path): InputStream`, `listAssets(dir): List<String>`, `assetSize(path): Long`,
+  `hasAsset(path): Boolean`. Lives in `com.aether.host.virtualization.assets`; created once per
+  session on a worker thread, closed by `HostInitializer.shutdown()`.
+- **Asset facade** — `GuestAssetArchive` plus the existing `GuestVirtualFileSystem` form the
+  asset surface: reads come from the archive, writes go to the guest root. This is the *host*
+  surface (adapter code, diagnostics, M5 payload previews), **not** a replacement for guest
+  `Context.getAssets()`, which cannot be repointed publicly (E1).
+- **`GuestResources`** — thin wrapper over host `Resources` that resolves an explicit
+  allow-list of guest lookups *by archive path* and otherwise behaves as host resources. A guest
+  resource id that is not in the allow-list yields `GUEST_RESOURCES_UNSUPPORTED`; no id mapping,
+  no idmap, no overlay table is built.
+
+**Behaviour implications accepted by this decision**
+
+1. Guest code calling `getResources().getString(R.x)`, theme attributes, or `LayoutInflater`
+   on guest layouts cannot work — guest resource ids are not mapped. Guest UI must be
+   self-contained.
+2. Guest code calling `getAssets()` receives **host** assets. Only host-mediated asset reads go
+   to the archive.
+3. Content the guest's native engine reads by file path is not intercepted; that is already true
+   for `GuestVirtualFileSystem` and stays true (not a sandbox).
+4. For the pinned target specifically (E9/E10: a native engine with 61.6 MB of assets and
+   176 MB of native libraries), the realistic Phase 2 outcome is *guest code executes inside a
+   proxy slot with guest data dirs and archive-backed asset reads* — **not** a guest-rendered
+   game UI. M3's acceptance text and [target-apk.md](target-apk.md) must state this plainly
+   instead of implying a playable guest.
+5. Any path to guest-rendered UI (isolated non-SDK lane, idmap-based resource loading, or a
+   runtime resource-plugin framework) is a **stance decision for the user**, tracked in §11 — it
+   is not an M2 implementation detail and must not be introduced silently.
 
 ## 4. Slot scheduling — `GuestSlotScheduler` over `VirtualActivitySlotRegistry` (M3)
 
@@ -402,15 +475,25 @@ These must not regress; each is a deliberate limit, not a backlog item hidden in
 9. **No flagger-gated capability enabled by default.** `DYNAMIC_APK_LOADING` and the new
    `GUEST_CONTAINER` both default to disabled, and flags are not a security boundary — the
    trust policy is.
+10. **No guest resource-id mapping and no non-SDK resource lane.** Guest `resources.arsc` is not
+    loaded, no idmap/overlay table is built, and `AssetManager`/`ResourcesManager` internals are
+    never touched reflectively (§3.1).
 
 ## 11. Open decisions carried by M0
 
 | # | Decision | Blocking | Recorded in |
 | --- | --- | --- | --- |
-| M0.2 | Resource/asset access path for a private APK (public path · `addAssetPath` · documented fallback) | M2, then M3 | §3 table row `getResources()` + [architecture.md](architecture.md) |
+| M0.2 | Resource/asset access path for a private APK | ✅ **decided: option (c)** — public-API fallback, `GuestAssetArchive` over the verified cached APK; (a) does not exist, (b) needs hidden APIs | §3.1 (full decision record) |
 | M0.3 | Manifest parsing path (`getPackageArchiveInfo` vs in-house AXML reader) | M1 | §2 field set + `verify_host_structure.py` fixture test |
 | M0.4 | Fixture guest APK (prebuilt vs Gradle-built, license/notice) | all CI tests | M0.4 record |
 | M0.5 | Production wiring for `AetherRuntime.bootstrap` (candidate `AetherApplication.onCreate`), the install-op surface that calls `HostInitializer.loadTargetApk`, the `flagger` toggle path, and the `message_bridge` payload contract | M3, M5 | §7.1, §9.6 |
+
+**Deferred follow-ups (do not block M1/M2)**
+
+| # | Item | Blocks |
+| --- | --- | --- |
+| F1 | On-device confirmation of Spike A (§3.1) — run the option (c) path on real hardware and re-measure; no option was chosen *because* of a runtime result, so this validates rather than decides | M3 manual validation |
+| F2 | Stance decision for the user: allow an isolated non-SDK resource lane, or accept a guest that executes without rendering its own UI (§3.1 consequence 5) | M3 target expectations |
 
 Open inputs that only the user can supply (plan §6): test device/emulator details (#4),
 confirmation of authorization to run/inspect the target APK (#5), optional logcat (#6). None of
@@ -421,7 +504,8 @@ them blocks M0–M2.
 | Spec section | Milestone | Verified by |
 | --- | --- | --- |
 | §2 `GuestPackage` + persistence | M1 | JVM tests against the in-repo manifest fixture; parse → persist → reload determinism test |
-| §3 `GuestContext` | M2 | Instrumented test loading a guest string, asset, and theme attribute |
+| §3 `GuestContext` | M2 | Instrumented test: host resources resolve, `GuestVirtualFileSystem` paths stay inside the guest root, a guest resource id yields `GUEST_RESOURCES_UNSUPPORTED` |
+| §3.1 `GuestAssetArchive` + Spike A record | M2 | JVM tests over the fixture APK (and the local target APK) asserting `assets/**` reads, path rejection, and that no `AssetManager`/`ResourcesManager` reflection appears in host source |
 | §4 scheduler | M3 | JVM tests for booking, contention, orientation preference, release idempotency |
 | §5 `GuestRuntimeAdapter` | M3 | Instrumentation asserting guest `Application.onCreate` + `Activity.onCreate/onResume` through the relay, and that `release()` is idempotent |
 | §6 thread rules | M1–M3 | Code review gate + instrumentation assertions that guest lifecycle runs on the main looper |
