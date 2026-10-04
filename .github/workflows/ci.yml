@@ -31,9 +31,6 @@ jobs:
       - name: Verify source, manifest, and JNI structure
         run: python3 scripts/verify_host_structure.py
 
-      - name: Verify imported Snake assets and resources
-        run: python3 scripts/verify_snake_payload.py
-
       - name: Verify JNI bootstrap and runtime source
         shell: bash
         run: |
@@ -119,15 +116,8 @@ jobs:
           python3 scripts/verify_apk_architecture.py android-host/build/outputs/apk/debug/android-host-debug.apk debug
           python3 scripts/verify_apk_architecture.py android-host/build/outputs/apk/release/android-host-release-unsigned.apk release
 
-      - name: Run native runtime-state tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          g++ -std=c++17 -I aether-native/src/main/cpp \
-            aether-native/src/main/cpp/runtime/runtime_state.cpp \
-            integration-test/native/runtime_state_test.cpp \
-            -o /tmp/runtime_state_test -pthread
-          /tmp/runtime_state_test
+      - name: Run native test suite (host-side)
+        run: sh scripts/native_tests.sh
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4

@@ -1,115 +1,91 @@
 # AetherEngine
 
-A regular Android host application that embeds the Aether Flutter/Dart application beside a separate custom native subsystem and an in-process virtualization-container foundation.
+A regular, installable Android host application that embeds a Flutter/Dart UI beside a custom
+native runtime (`libaether.so`) and an in-process virtualization-container foundation.
 
-> **What works now:** `MainActivity` is a real `FlutterActivity`; the Android host builds and packages Aether's `libaether.so`, Flutter's `libflutter.so`, Flutter assets, and (in release) Dart AOT `libapp.so`. The APK installs and runs through Android's normal app model; root is not required.
->
-> **Important limit:** `DynamicApkLoader` only verifies and loads DEX code. It is not a sandbox and does not run an arbitrary APK's Android components automatically. Guest code shares the host UID and permissions. See [The Host container design](docs/host-container.md).
->
-> **Selected guest target:** only 8 Ball Pool `com.miniclip.eightballpool` version `56.30.0` (version code `4028`) is accepted by the trust policy. The exact game APK has not been inspected, and the current loader does not launch it. Snake Engine is a separate Android guest-container host; only its `assets/` and compiled `res/` folders are carried as opaque package data, not as its runtime or as evidence for the target. See [target APK](docs/target-apk.md) and the [Snake extraction log](docs/reference/snake-engine/ARCHIVE_EXTRACTION_LOG.md).
+**What works today**
 
-## Runtime architecture
+- The host APK builds, installs, and runs through Android's normal app model; root is not required.
+- The Dart app talks to the custom native runtime over `MethodChannel("aether/runtime")`
+  (`version`, `state`, `initialize`, `shutdown`, `ping`), and the native lane (runtime state
+  machine, task dispatcher, JSON message bridge) passes host-side tests on any machine.
+- The guest loader verifies a pinned APK identity plus explicit signer pins, copies the APK to
+  app-private read-only storage, re-verifies it, then creates a guest-first `DexClassLoader`
+  and a per-digest `GuestVirtualFileSystem` root.
 
-```text
-                          Android
-                             │
-              AndroidManifest.xml + classes.dex
-                 ┌───────────┴────────────┐
-                 │                        │
-                 ▼                        ▼
-       Custom Native JNI lane        FlutterJNI lane
- com.aether.host.bridge.Native       FlutterActivity/Engine
-   System.loadLibrary("aether")             │
-                 │                   libflutter.so
-                 ▼                        │
-          libaether.so                     ▼
-       JNI_OnLoad/RegisterNatives     Flutter runtime/Dart VM
-                                           │
-                                      libapp.so (release)
-                                           │
-                                           ▼
-                                     Dart application
+**What does not work yet**
 
-Dart ↔ MethodChannel("aether/runtime") ↔ AetherRuntimeChannel (Kotlin)
-                                          ↔ custom Native facade/libaether.so
+- Loading is not a sandbox and does not install or launch another app's Android components.
+  Guest code shares the host UID and permissions; guest `Application`/`Activity`, resources,
+  native libraries, and package-manager behavior are not virtualized. The milestone plan is
+  [PLAN.md](PLAN.md).
+
+## Verify it locally
+
+```sh
+sh scripts/check_local.sh
 ```
 
-The custom Aether JNI bridge and Flutter's `FlutterJNI` are separate paths. Dart platform messages pass through Flutter's engine to Kotlin; Dart does not call Aether's JNI methods directly. See [runtime architecture](docs/architecture.md).
+Runs the repository structure verifier and the host-side native suite (runtime-state machine,
+thread dispatcher, and message-bridge smoke demo). No Android SDK, JDK, or Flutter needed.
 
-## Main source areas
+The Android and Flutter layers are checked by CI (`.github/workflows/ci.yml`): Gradle unit
+tests, `flutter analyze` / `flutter test`, debug/release APK assembly, and binary verification
+of the packaged artifacts (`scripts/verify_apk_architecture.py`).
+
+## Repository layout
 
 ```text
-android-host/src/main/kotlin/com/aether/host/
-├── AetherApplication.kt                 # Android process owner
-├── MainActivity.kt                      # FlutterActivity entry point
-├── bridge/
-│   ├── Native.kt                         # custom libaether.so facade (4 known methods)
-│   └── AetherRuntimeChannel.kt            # Flutter platform-message handler
-├── bootstrap/                            # HostInitializer + P0..P3 lifecycle registry
-├── target/TargetApkContract.kt            # pinned external guest release identity
-└── virtualization/
-    ├── filesystem/                        # app-private guest VFS facade (explicit callers only)
-    ├── loader/                            # APK verification + guest-first ClassLoader proxy
-    ├── activity/                          # VirtualActivity and proxy Activity pools
-    ├── components/                        # service/provider/receiver proxies
-    ├── flags/flagger.kt                   # process-local host feature switches
-    ├── util/MethodUtils.kt                # visibility-respecting reflection helpers
-    └── web/InternalWebBrowser.kt          # internal HTTPS-only browser
-
-android-host/src/main/assets/snake/
-├── assets/                                # extracted Snake package assets (opaque data)
-└── res/                                   # compiled Snake resources kept opaque; not Aether R resources
-
-aether-native/                             # C++ source for libaether.so
-flutter-app/                               # Flutter module: Dart UI, logic, channels, assets
-scripts/verify_host_structure.py          # source/manifest/component registration check
-scripts/verify_apk_architecture.py        # packaged APK binary/asset check
-scripts/verify_snake_payload.py            # imported Snake assets/res inventory check
-docs/                                      # host architecture, target contract, lifecycle, JNI
-└── reference/snake-engine/                 # compact Snake virtualization-host analysis
+android-host/                  # Kotlin host module (manifest, sources, resources)
+aether-native/src/main/cpp/    # C++ sources for libaether.so
+flutter-app/                   # Flutter add-to-app module (Dart UI, channels, services)
+integration-test/              # host-side native tests + Android/Flutter contract tests
+scripts/                       # verifiers + local check runner
+PLAN.md                        # teardown record + milestones
+.github/workflows/             # ci.yml (build/test), release.yml (v* tag releases)
 ```
 
-The generated `flutter-app/.android/` directory is created by `flutter pub get` and is intentionally not checked in.
+Host source map (`android-host/src/main/kotlin/com/aether/host/`):
 
-## Current JNI contract vs target APK contract
+```text
+AetherApplication.kt / MainActivity.kt   # Android process + FlutterActivity entry
+bootstrap/                               # HostInitializer, slot registry, lifecycle relay
+bridge/                                  # Native JNI facade + MethodChannel handler
+runtime/                                 # AetherRuntime bootstrap + HostLifecycle
+target/TargetApkContract.kt              # pinned external guest identity
+virtualization/                          # loader, filesystem, activity, components, flags, util, web
+```
 
-The source currently implements `com.aether.host.bridge.Native` with `initialize()`, `shutdown()`, `getVersion()`, and `runtimeState()`, registered from `JNI_OnLoad()` using `RegisterNatives()`.
+## Target guest policy
 
-The supplied target architecture names `com.aether.helper.Native` (11 native methods) and `com.aether.helper.flagger` (2 native methods). Their exact declarations/descriptors are not present in this repository. The host's `com.aether.host.virtualization.flags.flagger` is a separate pure-Kotlin utility; it is not that target JNI class. Do not treat the 11+2 contract as implemented or invent signatures. The separate Snake reference has `com.snake.helper.Native`; its methods are not interchangeable with either Aether or 8 Ball Pool. See [JNI contract](docs/jni-contract.md) and the [Snake reference bundle](docs/reference/snake-engine/README.md).
+The trust policy accepts only 8 Ball Pool `com.miniclip.eightballpool` version `56.30.0`
+(version code `4028`) with explicitly configured SHA-256 signer pins; a package/version match
+alone is insufficient. The target APK is never committed to Git (`local/` is ignored), and the
+loader does not launch it. Hidden-API bypass, signature/permission spoofing, package-manager
+spoofing, and anti-cheat or licensing bypass are intentionally not implemented. Loaded guest
+code runs with the host UID and permissions: this is not isolation.
 
-## Build and test
+## Build and test (full toolchain)
 
-Requirements: JDK 17+, Flutter 3.47.0, Android SDK API 36, Android NDK 26.3.11579264, and CMake 3.22.1. Configure the local Android SDK and Flutter SDK paths in root `local.properties`, then:
+Requirements: JDK 17+, Flutter 3.47.0, Android SDK API 36, Android NDK 26.3.11579264, CMake 3.22.1.
 
-```bash
-cd flutter-app
-flutter pub get
-cd ..
+```sh
+cd flutter-app && flutter pub get && cd ..
 ./gradlew :android-host:assembleDebug :android-host:assembleRelease :android-host:test
-python3 scripts/verify_host_structure.py
-python3 scripts/verify_snake_payload.py
 python3 scripts/verify_apk_architecture.py android-host/build/outputs/apk/debug/android-host-debug.apk debug
 python3 scripts/verify_apk_architecture.py android-host/build/outputs/apk/release/android-host-release-unsigned.apk release
 ```
 
-Flutter tests:
+Flutter module checks:
 
-```bash
-cd flutter-app
-flutter analyze
-flutter test
+```sh
+cd flutter-app && flutter analyze && flutter test
 ```
 
-The release APK is unsigned by this CI build and must be signed for distribution. GitHub Actions uploads debug and release APKs as a run artifact from every `ci.yml` run, and pushing a `v*` tag runs `release.yml`, which builds and tests the same artifacts and publishes them with a SHA-256 checksum file to a GitHub Release (the release APK in it is still unsigned). The supported ABI is currently `arm64-v8a`; the Flutter 3.47 engine sets the minimum Android API to 24 (Android 7.0).
+Supported ABI: `arm64-v8a`; minimum Android API 24 (Android 7.0).
 
-## Documentation
+## Release
 
-- [Selected guest APK: 8 Ball Pool 56.30.0 and verification limits](docs/target-apk.md)
-- [Snake Engine capability notes and extraction log](docs/reference/snake-engine/README.md)
-- [Snake `assets/` and `res/` extraction details](docs/reference/snake-engine/ARCHIVE_EXTRACTION_LOG.md)
-- [Host container structure, trust boundaries, and proxy inventory](docs/host-container.md)
-- [Four-layer architecture and binary mapping](docs/architecture.md)
-- [JNI contract and unknown target signatures](docs/jni-contract.md)
-- [Android/native/Flutter lifecycle](docs/lifecycle.md)
-- [Phase 2 plan: guest container milestones](docs/phase2-plan.md)
-- [Guest container specification: objects, thread rules, events, error codes, control-plane payloads](docs/guest-container-spec.md)
+Pushing a `v*` tag runs `.github/workflows/release.yml`: it re-runs the checks above and
+publishes the debug and release APKs plus a `SHA256SUMS.txt` checksum file to a GitHub Release.
+The release APK from this build is unsigned and must be signed before distribution.
