@@ -103,8 +103,8 @@ Verified by tracing source, not by assumption:
 
 | # | Snake mechanism (evidence) | Aether today | Phase 2 action |
 | --- | --- | --- | --- |
-| 1 | Virtual install: `PackageParser` → `BPackage` → persist → resolvers (EVIDENCE_CHAIN §0-B) | DEX copy + verify only; no package model, no persistence | **M1** — `GuestPackage` model + persistence + component resolver |
-| 2 | Launcher resolution: `MAIN`+`LAUNCHER`/`INFO` → real activity class (§0-C) | absent | **M1** — intent resolution |
+| 1 | Virtual install: `PackageParser` → `BPackage` → persist → resolvers (EVIDENCE_CHAIN §0-B) | DEX copy + verify only; no package model, no persistence | **M1** — `GuestManifestParser` + `GuestPackage` model + persistence + component resolver ([spec §2.1](guest-container-spec.md)) |
+| 2 | Launcher resolution: `MAIN`+`LAUNCHER`/`INFO` → real activity class (§0-C) | absent | **M1** — intent resolution from parsed `intent-filter`s (the framework archive API cannot supply them) |
 | 3 | Stub scheduler + slot booking `P0..P3` (NATIVE_CALLSITE_MAP #9/#10) | pools exist; no scheduler/booking | **M3** — slot scheduler over existing registry |
 | 4 | Guest bind: virtual ActivityThread, `newApplication`, `callActivityOnCreate` (§0-E) | absent | **M3** — `GuestRuntimeAdapter` in proxy Activity |
 | 5 | Guest Context/ClassLoader redirect (`z2`, `a3`) | ClassLoader exists; no Context | **M2** — guest Context/resources facade |
@@ -150,12 +150,18 @@ M0.2–M0.5, whose decisions still have to be written back into it.
   `AssetManager` is `final`. Decision record, evidence, and accepted consequences are in the spec.
 - Device-based confirmation was not possible in this environment and is tracked as follow-up F1.
 
-**M0.3 Spike B: manifest parsing path**
+**M0.3 Spike B: manifest parsing path** (✅ resolved 2026-10-04 — see
+[spec §2.1](guest-container-spec.md))
 
-- Compare `getPackageArchiveInfo` (identity + component classes, **no intent filters**)
-  versus an in-house minimal AXML reader (intent filters included; format proven parseable
-  against `docs/AndroidManifest.xml` already in the repo).
-- Deliverable: chosen parser + the exact fields `GuestPackage` will expose.
+- Compared `getPackageArchiveInfo` (identity + component classes, **no intent filters**, and
+  needs an Android runtime the CI gate does not have) against an in-house minimal AXML reader.
+- Result: **hybrid** — the platform API stays authoritative for identity/signer trust inside
+  `DynamicApkLoader` (unchanged), and a new in-house `GuestManifestParser` builds the
+  `GuestPackage` model, because `PackageInfo` cannot return intent filters and launcher
+  resolution needs them.
+- A throwaway prototype reader (not committed) parsed the verified APK's compiled manifest and
+  the in-repo fixture identically — 84 492 bytes, 457 strings, 437 elements, 953 attributes,
+  ~1.9 ms median — reproducing every already-verified identity value.
 
 **M0.4 Fixture guest APK**
 
@@ -175,17 +181,21 @@ M0.5 decisions logged; no production behavior change required in M0 itself.
 
 ### M1 — Guest package model (M)
 
-- `virtualization/package/`: AXML/manifest parsing → `GuestPackage` (application class,
-  components, intent filters, min/target SDK, permissions, label/icon refs).
+- `virtualization/package/`: AXML/manifest parsing (`GuestManifestParser`, budgets + fail-closed
+  error mapping per [spec §2.1](guest-container-spec.md)) → `GuestPackage` (application class,
+  components, intent filters, min/target SDK, permissions, label/icon refs). Entry bytes come
+  from the allow-listed `ApkEntrySource` over the verified read-only cached APK.
 - Persistence next to the existing guest roots
   (`noBackupFilesDir/aether-guest-data/<pkg>/<versionCode>/<sha256>/package.json`).
 - Component resolver: `resolveLauncher()` (`MAIN`+`LAUNCHER`, `MAIN`+`INFO` fallback),
   `findActivity/findService/findReceiver/findProvider`.
 - Wire into `HostInitializer.loadTargetApk` (parse after trust verification).
 
-**Acceptance:** parse → persist → reload is deterministic; JVM unit tests run against the
-in-repo target manifest fixture; `verify_host_structure.py` extended for the new files;
-existing verifiers still pass.
+**Acceptance:** parse → persist → reload is deterministic; JVM unit tests parse the in-repo
+target manifest fixture and assert identity, component counts, permission list, and launcher
+resolution, plus budget-limit and malformed-input rejection mapped to `GUEST_MANIFEST_INVALID`
+and a parse-time budget check against the measured ~2 ms; `verify_host_structure.py` extended
+for the new files; existing verifiers still pass.
 
 ### M2 — Guest resources & context (M, highest risk)
 
@@ -295,7 +305,7 @@ M6 continuous + final pass
 | Decision | Status |
 | --- | --- |
 | Single-process MVP for Phase 2 | ✅ **decided: yes** (2026-10-04) |
-| In-house AXML reader vs `getPackageArchiveInfo` | pending Spike B (M0.3) |
+| In-house AXML reader vs `getPackageArchiveInfo` | ✅ **decided: hybrid** — `getPackageArchiveInfo` for trust/identity, in-house `GuestManifestParser` for the model (M0.3, 2026-10-04) |
 | Resource/asset API path | ✅ **decided: (c) fallback** — `GuestAssetArchive` over the verified APK; no hidden APIs, no guest resource-id mapping (M0.2, 2026-10-04) |
 | Fixture guest: prebuilt vs Gradle-built | pending M0.4 |
 

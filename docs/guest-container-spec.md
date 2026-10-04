@@ -1,7 +1,7 @@
 # Guest Container Specification (Phase 2 / M0.1)
 
 Status: **draft contract — no code ships with this document** · Date: 2026-10-04 ·
-Milestone: Phase 2 M0.1 (+ M0.2 Spike A resolved, §3.1) · Base: `main` @ `630c474`
+Milestone: Phase 2 M0.1 (+ M0.2 Spike A §3.1, M0.3 Spike B §2.1 resolved) · Base: `main` @ `630c474`
 
 This document fixes the contracts that Phase 2 milestones M1–M5 implement: which objects
 exist, who owns them, which thread each operation runs on, how guest lifecycle events flow,
@@ -33,6 +33,8 @@ Flutter/Dart  ── MethodChannel("aether/runtime") ──►  AetherRuntimeCha
 Control plane (M5)                                     │  reads/requests only
                                                         ▼
 HostInitializer  ──owns──►  guest session (one at a time)
+    ├── GuestManifestParser ──parses──►  AndroidManifest.xml of the verified APK → GuestPackage (§2.1)
+    │   └── ApkEntrySource   ──reads───►  allow-listed entries of the verified APK: manifest + assets/** (§2.1, §3.1)
     ├── GuestSlotScheduler   ──books──►  proxy slot (VirtualActivitySlotRegistry snapshots)
     ├── GuestRuntimeAdapter  ──binds──►  guest Application + Activity inside one booked slot
     ├── GuestPackage         ──model──►  parsed/persisted manifest of one verified APK
@@ -90,6 +92,96 @@ Immutable value model of one verified APK. No `Context`, no `ClassLoader`, no fi
   testable.
 - Reload: a model is reloaded only when `apkSha256` matches a currently verified, cached APK.
   A digest with no matching verified APK is deleted, never trusted.
+
+### 2.1 Spike B decision record — guest manifest parsing (M0.3, resolved 2026-10-04)
+
+**Question.** How does the host build the §2 model — components, intent filters, permissions,
+SDK levels, application class, launcher — from the compiled `AndroidManifest.xml` inside a
+verified but uninstalled APK?
+
+**Method and its limits.** No Android runtime was available (the sandbox has no JDK/Android
+SDK and plan §6 input #4 is still missing), so option (b) was settled from the framework's own
+API surface rather than by executing it, while option (a) was validated by a **throwaway
+prototype reader written from the documented AOSP chunk format** and run against (i) the real
+`AndroidManifest.xml` entry of the verified APK and (ii) `docs/AndroidManifest.xml`, the copy
+already committed to this repository. The prototype is a spike instrument only and is not
+committed; the production parser is M1 Kotlin.
+
+**Evidence**
+
+| # | Finding | Source |
+| --- | --- | --- |
+| B1 | `PackageInfo` exposes `packageName`, `versionCode`/`versionName`, `applicationInfo`, `activities`/`services`/`receivers`/`providers`, `requestedPermissions` — and **no intent-filter data anywhere** in `PackageInfo` or `ComponentInfo`. Launcher resolution (§2) and M4's dispatch both need filters, so the framework result alone cannot produce this model. | AOSP `android/content/pm/PackageInfo.java` field list |
+| B2 | `getPackageArchiveInfo` needs an Android runtime. This repository's CI runs JVM unit tests only (no emulator job) and sets `unitTests.isReturnDefaultValues = true`, so framework calls return defaults — option (b) could not be covered by the existing CI gate without adding instrumentation infrastructure. | `.github/workflows/ci.yml`, `android-host/build.gradle.kts` |
+| B3 | The platform exposes no public binary-XML reader: `android.content.res` chunk APIs are internal, and `XmlResourceParser` instances come from resolved resources, not from an arbitrary archive path. | AOSP package structure |
+| B4 | Compiled `AndroidManifest.xml` is a small, stable chunk format: `RES_XML` (0x0003) → string pool (0x0001) → optional resource map (0x0180) → nodes 0x0100–0x0104, with fixed 20-byte attribute records and both UTF-8 and UTF-16 pools decoded from one offsets array. | AOSP `ResourceTypes.h` / `AssetManager` AXML layout |
+| B5 | Measured on the real entry: 84 492 bytes, 457 string-pool entries, 437 elements, 953 attributes; parse time **1.78 / 1.91 / 2.32 ms** (min / median / max) over 20 runs. | prototype run against `local/target-apk/8bp-56.30.0-4028.apk` |
+| B6 | Values match the independently recorded binary facts: package `com.miniclip.eightballpool`; versionCode `4028` / versionName `56.30.0`; minSdk `23` / targetSdk `36`; application `…EightBallPoolApplication`; 106 activities; 15 `uses-permission`; launcher resolved to `…EightBallPoolActivity` via `MAIN`+`LAUNCHER`. Newly measured: 20 services, 22 receivers, 15 providers (all carrying `authorities`), 6 activity intent-filters, 45 activities with explicit `exported`, 21 with `launchMode`, 1 `uses-feature`, `compileSdkVersion 36`. | prototype vs [target-apk.md](target-apk.md) |
+| B7 | The same prototype parsed the committed `docs/AndroidManifest.xml` fixture to identical results, so CI can cover this parser **without the target APK and without a device**. | prototype run against `docs/AndroidManifest.xml` |
+| B8 | Negative tests: child chunk size `0`, child chunk size huge, mid-node truncation, plain-text (uncompiled) XML, `stringCount = 4 294 967 280`, and an attribute block with `attributeSize < 20` must all fail closed; budget knobs for string count, node count, depth, and per-element attribute count are enforceable. **Prototype finding:** three of those inputs surfaced *untyped* host errors instead of a domain error — so the production parser must bounds-check every read and map every failure to `GUEST_MANIFEST_INVALID`; no exception type may escape (§8). | prototype negative tests |
+| B9 | *(assessment)* Third-party readers (`apk-parser`-style libraries, apktool's `AndrolibResources`) would add a runtime Maven dependency, its supply-chain and method-count surface, and apktool additionally expects an extracted project on disk and decodes `resources.arsc` — a scope Spike A already excluded — for what this model needs from one 82 KB entry. | spike assessment |
+
+**Options evaluated**
+
+| Option | Verdict | Why |
+| --- | --- | --- |
+| (a) AXML reader | **chosen — an in-house minimal reader (`GuestManifestParser`), not a third-party library** | It is the only way to obtain intent filters, filters, and component detail (B1, B3); it is pure Java/Kotlin, so the existing JVM test gate can cover it against the committed fixture (B2, B7); it needs no new dependency (B9); and the format is small and stable, measured at ~1.9 ms for this APK (B4, B5). |
+| (b) `getPackageArchiveInfo` | **kept for trust verification only, rejected as the model source** | It is authoritative for package/version/signer identity and is already the basis of `GuestApkTrustPolicy` inside `DynamicApkLoader` — that stays. But it cannot return intent filters (B1), needs an Android runtime the CI gate does not have (B2), and the platform offers no public parser to fill the gap (B3). |
+
+**Chosen approach — hybrid, each tool used where it is authoritative**
+
+1. `DynamicApkLoader` (existing) verifies package/version/signer pins with `getPackageArchiveInfo`
+   against a read-only private copy **before** any manifest parsing. Unchanged.
+2. `GuestManifestParser` (new) parses the compiled manifest of that same verified file and
+   produces the §2 model.
+3. The parser's identity fields are cross-checked against the values the trust policy accepted;
+   a disagreement fails the install with `GUEST_MANIFEST_INVALID` (a platform-rejected APK is
+   `GUEST_TRUST_REJECTED` instead).
+
+**New components (M1)**
+
+- **`GuestManifestParser`** — `com.aether.host.virtualization.package`, pure Kotlin with **no
+  Android imports** (so it runs in JVM unit tests): `parse(bytes: ByteArray): GuestManifest`.
+  Namespace-aware for `android:` only; unknown prefixes such as `tools:` are ignored, not
+  merged. Manifest declaration order is preserved. Values decode as: string-pool reference →
+  string, `TYPE_INT_DEC`/`TYPE_INT_HEX` → decimal text, `TYPE_INT_BOOLEAN` → `true`/`false`,
+  reference types → `@0x%08x` (compiled manifests carry no resource *names*, consistent with
+  §3.1). Hard budgets: input ≤ 8 MiB, string count ≤ 65 536, nodes ≤ 200 000, depth ≤ 64,
+  attributes per element ≤ 1 024. Any violation → `GUEST_MANIFEST_INVALID`.
+- **`ApkEntrySource`** — allow-listed, read-only ZIP access to the verified cached APK
+  (`AndroidManifest.xml` plus `assets/**`), built from the digest `GuestApkTrustPolicy` accepted.
+  It owns the single `ZipFile` handle and is shared by `GuestManifestParser` (M1) and
+  `GuestAssetArchive` (M2). This **amends §3.1**: `GuestAssetArchive` is the assets-scoped view
+  over `ApkEntrySource` rather than owning its own handle.
+- **`GuestManifest`** — the immutable parse result, immediately mapped to `GuestPackage` (§2);
+  kept separate so parsing can be unit-tested without persistence.
+
+**Exact field set exposed to `GuestPackage`**
+
+| `GuestPackage` field | AXML source | `getPackageArchiveInfo` has it? |
+| --- | --- | --- |
+| `packageName`, `versionName`, `versionCode` | `manifest@package` / `@android:versionName` / `@android:versionCode` (+ `versionCodeMajor`) | yes (authoritative, trust-verified) |
+| `minSdkVersion`, `targetSdkVersion` | `uses-sdk@android:minSdkVersion` / `@android:targetSdkVersion` | indirectly |
+| `applicationClass` | `application@android:name` | yes |
+| `permissions` | `uses-permission@android:name` (declaration order) | yes |
+| `usesFeatures` | `uses-feature@android:name` + `@android:required` | partially |
+| `activities` / `services` / `receivers` / `providers` | `@android:name`, `@android:exported`, `@android:process`, `@android:launchMode`, `@android:permission`, `@android:authorities`, `@android:enabled`, nested `intent-filter` → `action`/`category`/`data` | components yes, **intent filters no** |
+| `launcherActivity` | resolved from the filters above (§2) | **no** |
+| `apkSha256`, `signerSha256`, `installedAt`, `schemaVersion` | host-computed / host-written, never from the manifest | `signerSha256` yes |
+
+**Behaviour implications accepted by this decision**
+
+1. Parse order is trust-first: no manifest byte is read before the trust policy accepts the file.
+2. The model is order-preserving and free of clock/locale input, so parse → persist → reload
+   stays byte-stable (§2 persistence, §12).
+3. Parser failures never leak implementation detail to Dart: one code, `GUEST_MANIFEST_INVALID`
+   with detail `manifest_invalid` (§8), regardless of which guard tripped.
+4. `DynamicApkLoader`'s `getPackageArchiveInfo` call is **not** removed; the trust path is
+   unchanged, and the platform stays the authority on identity and signing.
+5. `resources.arsc` remains out of scope (Spike A), so no resource ids exist in the model even
+   though `theme`/`icon` attributes parse as `@0x%08x`.
+6. The prototype is disposable: M1's Kotlin parser must reproduce B5–B8 measurements, and the
+   committed `docs/AndroidManifest.xml` fixture is the regression input.
 
 ## 3. `GuestContext` — resources, class loading, data dirs (M2)
 
@@ -150,8 +242,8 @@ on-device run; that run stays recorded as a follow-up in §11.
 
 **Chosen approach and new components (M2)**
 
-- **`GuestAssetArchive`** — public `ZipFile` over the verified, read-only cached APK, opened only
-  for a digest already accepted by `GuestApkTrustPolicy`. Only `assets/**` is exposed. Rejects
+- **`GuestAssetArchive`** — assets-scoped view over `ApkEntrySource` (§2.1), which owns the
+  read-only `ZipFile` handle on the verified cached APK and exposes only `assets/**`. Rejects
   absolute paths, `..` components, and any entry outside `assets/`. API:
   `openAsset(path): InputStream`, `listAssets(dir): List<String>`, `assetSize(path): Long`,
   `hasAsset(path): Boolean`. Lives in `com.aether.host.virtualization.assets`; created once per
@@ -484,7 +576,7 @@ These must not regress; each is a deliberate limit, not a backlog item hidden in
 | # | Decision | Blocking | Recorded in |
 | --- | --- | --- | --- |
 | M0.2 | Resource/asset access path for a private APK | ✅ **decided: option (c)** — public-API fallback, `GuestAssetArchive` over the verified cached APK; (a) does not exist, (b) needs hidden APIs | §3.1 (full decision record) |
-| M0.3 | Manifest parsing path (`getPackageArchiveInfo` vs in-house AXML reader) | M1 | §2 field set + `verify_host_structure.py` fixture test |
+| M0.3 | Manifest parsing path (`getPackageArchiveInfo` vs in-house AXML reader) | ✅ **decided: hybrid** — platform API stays authoritative for identity/signer trust, an in-house `GuestManifestParser` builds the model (the framework cannot return intent filters) | §2.1 (full decision record) |
 | M0.4 | Fixture guest APK (prebuilt vs Gradle-built, license/notice) | all CI tests | M0.4 record |
 | M0.5 | Production wiring for `AetherRuntime.bootstrap` (candidate `AetherApplication.onCreate`), the install-op surface that calls `HostInitializer.loadTargetApk`, the `flagger` toggle path, and the `message_bridge` payload contract | M3, M5 | §7.1, §9.6 |
 
@@ -504,6 +596,7 @@ them blocks M0–M2.
 | Spec section | Milestone | Verified by |
 | --- | --- | --- |
 | §2 `GuestPackage` + persistence | M1 | JVM tests against the in-repo manifest fixture; parse → persist → reload determinism test |
+| §2.1 `GuestManifestParser` + Spike B record | M1 | JVM tests parsing `docs/AndroidManifest.xml` (package/version/application class/106 activities/15 permissions/launcher), budget-limit rejection tests, malformed-input tests asserting `GUEST_MANIFEST_INVALID`, and a parse-time budget check against the measured ~2 ms |
 | §3 `GuestContext` | M2 | Instrumented test: host resources resolve, `GuestVirtualFileSystem` paths stay inside the guest root, a guest resource id yields `GUEST_RESOURCES_UNSUPPORTED` |
 | §3.1 `GuestAssetArchive` + Spike A record | M2 | JVM tests over the fixture APK (and the local target APK) asserting `assets/**` reads, path rejection, and that no `AssetManager`/`ResourcesManager` reflection appears in host source |
 | §4 scheduler | M3 | JVM tests for booking, contention, orientation preference, release idempotency |
