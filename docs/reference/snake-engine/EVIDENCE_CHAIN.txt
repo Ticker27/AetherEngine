@@ -1,4 +1,7 @@
 # SNAKE Engine — เส้นทางการเชื่อมโยงการโหลดเกม (Chain of Evidence)
+
+> **Provenance and scope:** this narrative combines static analysis with external runtime artifacts (including `comsnake-live`, a runtime dump called `com.snake.zip` in this report, and `com.ninja.engine.zip`) that are not included in the compact Aether payload or the inspected `docs/snake.zip` package archive. Those runtime claims cannot be reproduced from the retained files. The extraction log records package assets/resources and manifest facts from the inspected archive, not successful guest-game execution. This is a Snake-only analyst report, not an Aether implementation guide or evidence for 8 Ball Pool 56.30.0.
+
 วันที่ตรวจสอบ: 2026-09-12 · Engine: Snake Engine v2.2.6 (`com.snake`) · เกมต้นแบบ: `com.miniclip.eightballpool`
 
 ---
@@ -161,9 +164,11 @@ if (l != null) F(l, userId);       // → dv0.C(intent, userId) → g00.n0() [bi
 
 ---
 
-## 3. หลักฐาน Runtime (จากเครื่องจริง — com.snake.zip)
+## 3. รายงานข้อมูล Runtime จาก artifact ภายนอก (ชื่อ `com.snake.zip`)
 
-| ไฟล์ | ค่า | ความหมาย |
+> รายการด้านล่างถอดจาก runtime bundle/report ภายนอก ไม่ใช่สมาชิกของ `docs/snake.zip` ที่ใช้สกัด `assets/` และ `res/`; ไฟล์ต้นฉบับและขั้นตอนทำซ้ำไม่ได้เก็บใน repository จึงถือเป็นข้อสังเกตที่รายงานไว้ ไม่ใช่ผลตรวจอิสระหรือหลักฐานว่า Aether รันเกมได้
+
+| ไฟล์ | ค่า | การตีความในรายงาน |
 |---|---|---|
 | `root/proc/0/cmdline` | `com.miniclip.eightballpool` | ชื่อ process ลูกที่ engine spawn |
 | `root/data/app/com.miniclip.eightballpool/package.conf` | EightBallPoolActivity / EightBallPoolApplication / v56.23.2 (562310023) / พาธจริง `/data/app/~~F1DD…/base.apk` | registry เกมที่ engine mount |
@@ -171,13 +176,13 @@ if (l != null) F(l, userId);       // → dv0.C(intent, userId) → g00.n0() [bi
 | `root/system/*.conf` | uid/user/shared-user | virtual environment confs |
 | `shared_prefs/com.snake.xml` | `cip_pub` (ว่าง) | engine pref |
 
-🔒 **ห้ามแตะ:** `comsnake-live/root/data/user/0/com.miniclip.eightballpool/` ทั้งหมด — data จริงของเกมจาก `com.snake.zip` ที่ทำงานอยู่ (หลักฐาน status ทำงานจริง) และ `attachments/uploads/` (ต้นฉบับ zip/apk) — ศูนย์อ่านกลาง
+🔒 **ขอบเขตการแก้ไข:** `comsnake-live/root/data/user/0/com.miniclip.eightballpool/` และ `attachments/uploads/` ถูกอ้างถึงใน external report แต่ไม่ได้เป็นส่วนหนึ่งของ repository นี้; รายงานระบุว่าเป็นข้อมูล runtime/ต้นฉบับที่ควรเก็บโดยไม่แก้ไข ทั้งนี้ไม่สามารถยืนยันสถานะหรือ provenance จากไฟล์ที่เหลืออยู่ใน repository ได้
 
 ---
 
-## 3.5 🆕 หลักฐาน Dynamic จาก com.ninja.engine.zip — เกม 56.29.1 รันสำเร็จ (เทียบโครง SNAKE)
+## 3.5 รายงาน Dynamic จาก `com.ninja.engine.zip` — อ้างถึงเกม 56.29.1 (เทียบโครง SNAKE)
 
-แหล่ง: `uploads/com.ninja.engine.zip` (สกัดไว้ `workspace/ninja-extract/`) — engine ตระกูลเดียวกัน รัน 8 Ball Pool 56.29.1 บน MIUI สำเร็จ
+แหล่งที่รายงาน: `uploads/com.ninja.engine.zip` (สกัดไว้ `workspace/ninja-extract/`) — รายงานอ้างว่า engine ตระกูลเดียวกันเปิด 8 Ball Pool 56.29.1 บน MIUI ได้สำเร็จ แต่ artifact และขั้นตอนทดสอบไม่ได้อยู่ใน repository นี้ จึงยังยืนยันผลดังกล่าวโดยอิสระไม่ได้ และไม่ใช่หลักฐานสำหรับ target 56.30.0
 
 ### ninja = com.app.framework.* (ชื่อไม่ obfuscate — map กลับ SNAKE ได้)
 | SNAKE (obfuscated) | ninja (ชื่อจริง) | บทบาท |
@@ -284,13 +289,12 @@ hidden dex (in-memory) → MethodUtils (Executable/AccessibleObject deps) → Na
 
 ---
 
-## 6. ไฟล์อ้างอิงหลัก (ภายใน workspace)
+## 6. External file references cited by the original analysis (not included here)
 
-- `snake_apk_extract/jadx_out/sources/com/snake/App.java` — Application entry
-- `snake_apk_extract/jadx_out/sources/com/Entry.java` — Launcher + channel G
-- `snake_apk_extract/jadx_out/sources/com/snake/helper/Native.java` — JNI bridge
-- `snake_apk_extract/jadx_out/sources/androidx/appcompat/view/menu/yu0.java` — role/process/launcher chain
-- `snake_apk_extract/jadx_out/sources/androidx/appcompat/view/menu/{qv0,dv0,g00,at0,jv0}.java` — Intent build + Binder AMS proxy
-- `comsnake-live/root/proc/0/cmdline` · `root/data/app/.../package.conf` — runtime evidence
-- `binary-analysis/` — repo CI (Ghidra/Blutter) สำหรับต่อยอด (remote: github.com/engine-dev01/binary-analysis)
-- ส่วนกลาง (อ่านอย่างเดียว): `/var/minis/shared/analysis/ghidra-extractjni-2026-09-12/`
+- `snake_apk_extract/jadx_out/sources/com/snake/App.java` — reported Application entry
+- `snake_apk_extract/jadx_out/sources/com/Entry.java` — reported launcher and channel G
+- `snake_apk_extract/jadx_out/sources/com/snake/helper/Native.java` — reported JNI bridge
+- `snake_apk_extract/jadx_out/sources/androidx/appcompat/view/menu/yu0.java` — reported role/process/launcher chain
+- `snake_apk_extract/jadx_out/sources/androidx/appcompat/view/menu/{qv0,dv0,g00,at0,jv0}.java` — reported Intent and Binder AMS proxy chain
+- `comsnake-live/root/proc/0/cmdline` and `root/data/app/.../package.conf` — runtime paths cited by the report
+- `binary-analysis/` and a separate Ghidra analysis output — external follow-up references; neither is included in this repository

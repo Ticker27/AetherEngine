@@ -61,7 +61,7 @@ The notes describe a different/expanded APK contract:
 
 The notes also sketch registration groups of 1, 2, and 10 methods. The current source does not contain those groups. The group sizes and their class ownership must be verified against the real DEX/APK; they cannot be inferred from the current Git source. Do not add placeholder methods simply to make the count appear to match.
 
-A separate [Snake Engine reference bundle](reference/snake-engine/README.md) contains reports about `com.snake.helper.Native` and `com.snake.helper.flagger`. Those are Snake-specific class paths, not declarations for `com.aether.helper.*`, Aether's host bridge, or 8 Ball Pool. The reference notes also describe more than one snapshot and record integrity mismatches; they are not sufficient grounds to copy JNI method names or descriptors into this project.
+A separate [Snake Engine reference bundle](reference/snake-engine/README.md) contains reports about `com.snake.helper.Native` and `com.snake.helper.flagger`. The [static extraction log](reference/snake-engine/ARCHIVE_EXTRACTION_LOG.md) records the pre-removal inspection of the `com.snake` 2.2.6 package snapshot and the hash mismatch with older notes. These Snake-specific class paths are not declarations for `com.aether.helper.*`, Aether's host bridge, or 8 Ball Pool. Call-site/runtime reports cite additional inputs not in the archive; do not copy their JNI names or descriptors into this project without direct, target-specific evidence.
 
 ## Extension design for multiple classes/tables
 

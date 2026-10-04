@@ -1,3 +1,5 @@
+> Provenance: legacy extracted strings attributed to the Snake `libapp.so` recorded in `libapp_analysis.txt`; its source binary is not retained, so this output is not independently verifiable here.
+
 0x214  80a49c7111088100a233b2ae788e1f48product no-code_comments dwarf_stack_traces_mode dedup_instructions no-tsan no-msan arm64 android compressed-pointers
 0x6f8  <optimized out>
 0x708  Handle

@@ -1,5 +1,6 @@
-# สกัดหลักฐานเชิงลึก: classes_1.dex + AndroidManifest_1.xml (Snake Engine 2.1.3)
+# สกัดหลักฐานเชิงลึก: classes_1.dex + AndroidManifest_1.xml (historical Snake Engine 2.1.3 snapshot)
 
+> **⚠️ Historical snapshot:** hashes below do not match the 2.2.6 package payload audited in [`ARCHIVE_EXTRACTION_LOG.md`](ARCHIVE_EXTRACTION_LOG.md). Do not use this note's version/hash metadata for the extracted `assets/` and `res/` payload.
 > **ขอบเขต:** อ้างหลักฐานที่ปรากฏใน 2 ไฟล์นี้เท่านั้น — `classes_1.dex` (3,868,092 B, DEX v039) และ `AndroidManifest_1.xml` (54,228 B, binary AXML → decode ด้วย apktool 2.10.0)
 > **การยืนยันเวอร์ชัน (หลักฐาน: md5):** `classes_1.dex` = `006e396872a920cb16a71cf12a7327a3`, `AndroidManifest_1.xml` = `379ad4c8599ef1c889e079e4b4e4b11c` — ไฟล์ชุดนี้คือชุดอ้างอิง (ไฟล์ชื่อเก่าถูกลบแล้วเพื่อไม่ให้สับสน)
 > **วิธีสกัด:** apktool 2.10.0 (baksmali → 5,445 ไฟล์ smali) + python3 parser (string pool 19,921 สตริง) + grep/sed/find

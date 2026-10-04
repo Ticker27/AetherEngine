@@ -1,3 +1,5 @@
+> Provenance: legacy extracted strings attributed to a Snake `libengine.so`; the source binary is not retained in this repository, so this output is not independently verifiable here.
+
 Android
 r25b
 8937393

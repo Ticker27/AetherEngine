@@ -24,7 +24,7 @@ The SHA-256 signer pin is still mandatory and must be calculated from a verified
 
 ## Snake Engine is a separate reference
 
-The repository now keeps the Snake Engine artifacts under [`docs/reference/snake-engine/`](reference/snake-engine/README.md). They describe a different host (`com.snake`) and refer to older/different 8 Ball Pool snapshots, including `56.23.2` and `56.29.1`. The reference bundle also records hash/size mismatches between some raw artifacts and the notes. It is useful for comparing architectural boundaries, but it does not verify or establish compatibility with 8 Ball Pool 56.30.0.
+Snake Engine is a separate Android guest-app virtualization/container host, not the selected guest game. The [static extraction log](reference/snake-engine/ARCHIVE_EXTRACTION_LOG.md) records that the inspected package manifest identified `com.snake` versionName `2.2.6`; it also documents the extracted `assets/` and compiled `res/` folders. The package does not contain an 8 Ball Pool `base.apk` or split APK. Some historical analysis notes mention 8 Ball Pool `56.23.2` or `56.29.1`, but they rely on other inputs and do not establish support for target `56.30.0`. Snake remains an architectural reference and its guest-container capability is not implemented by Aether's current DEX loader.
 
 ## Compatibility and implementation limits
 

@@ -1,6 +1,8 @@
 # libengine.so — Deep Analysis (Snake Engine native core)
 
-หลักฐานทั้งหมดจากการ decode/disassemble ไฟล์จริง — ไม่มีการเดา
+> **Provenance:** this legacy analyst report attributes its findings to a `libengine.so` binary with MD5 `2ae5d2b628942e13fce7a48728ebee25`. That binary is not retained in this repository, so the analysis cannot be independently revalidated here. It is not Aether runtime code.
+
+แหล่งที่ระบุในบันทึกเดิม: decode/disassemble ไฟล์จริง
 ไฟล์: `libengine.so` · MD5 `2ae5d2b628942e13fce7a48728ebee25` · 8,544,568 B
 
 ---

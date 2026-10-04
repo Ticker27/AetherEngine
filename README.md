@@ -6,7 +6,7 @@ A regular Android host application that embeds the Aether Flutter/Dart applicati
 >
 > **Important limit:** `DynamicApkLoader` only verifies and loads DEX code. It is not a sandbox and does not run an arbitrary APK's Android components automatically. Guest code shares the host UID and permissions. See [The Host container design](docs/host-container.md).
 >
-> **Selected guest target:** only 8 Ball Pool `com.miniclip.eightballpool` version `56.30.0` (version code `4028`) is accepted by the trust policy. The exact game APK has not been inspected, and the current loader does not launch it. Snake Engine analysis is retained as a separate reference bundle, not treated as evidence for the target. See [target APK](docs/target-apk.md) and [Snake reference](docs/reference/snake-engine/README.md).
+> **Selected guest target:** only 8 Ball Pool `com.miniclip.eightballpool` version `56.30.0` (version code `4028`) is accepted by the trust policy. The exact game APK has not been inspected, and the current loader does not launch it. Snake Engine is a separate Android guest-container host; only its `assets/` and compiled `res/` folders are carried as opaque package data, not as its runtime or as evidence for the target. See [target APK](docs/target-apk.md) and the [Snake extraction log](docs/reference/snake-engine/ARCHIVE_EXTRACTION_LOG.md).
 
 ## Runtime architecture
 
@@ -55,12 +55,17 @@ android-host/src/main/kotlin/com/aether/host/
     ├── util/MethodUtils.kt                # visibility-respecting reflection helpers
     └── web/InternalWebBrowser.kt          # internal HTTPS-only browser
 
+android-host/src/main/assets/snake/
+├── assets/                                # extracted Snake package assets (opaque data)
+└── res/                                   # compiled Snake resources kept opaque; not Aether R resources
+
 aether-native/                             # C++ source for libaether.so
 flutter-app/                               # Flutter module: Dart UI, logic, channels, assets
 scripts/verify_host_structure.py          # source/manifest registration check
 scripts/verify_apk_architecture.py        # packaged APK binary/asset check
+scripts/verify_snake_payload.py           # imported Snake assets/res inventory check
 docs/                                      # host architecture, target contract, lifecycle, JNI
-└── reference/snake-engine/                 # separate Snake evidence bundle; not the 8 Ball Pool target
+└── reference/snake-engine/                 # compact Snake virtualization-host analysis
 ```
 
 The generated `flutter-app/.android/` directory is created by `flutter pub get` and is intentionally not checked in.
@@ -98,7 +103,8 @@ The release APK is unsigned by this CI build and must be signed for distribution
 ## Documentation
 
 - [Selected guest APK: 8 Ball Pool 56.30.0 and verification limits](docs/target-apk.md)
-- [Snake Engine evidence bundle and integrity caveats](docs/reference/snake-engine/README.md)
+- [Snake Engine capability notes and extraction log](docs/reference/snake-engine/README.md)
+- [Snake `assets/` and `res/` extraction details](docs/reference/snake-engine/ARCHIVE_EXTRACTION_LOG.md)
 - [Host container structure, trust boundaries, and proxy inventory](docs/host-container.md)
 - [Four-layer architecture and binary mapping](docs/architecture.md)
 - [JNI contract and unknown target signatures](docs/jni-contract.md)

@@ -1,6 +1,8 @@
 # libapp.so — Deep Analysis (Snake Engine)
 
-หลักฐานทั้งหมดมาจากการ decode/disassemble ไฟล์จริง — ไม่มีการเดา
+> **Provenance:** this legacy analyst report attributes its findings to `libapp.so` SHA-256 `2d3577fbaaacc7cb63e5b04a5a21572eeee1e0d55b223941d6a5496a91a427c8`. The binary is intentionally not retained in this repository, so the analysis cannot be independently revalidated here. It is not Aether runtime code.
+
+แหล่งที่ระบุในบันทึกเดิม: decode/disassemble ไฟล์จริง
 ไฟล์: `libapp.so` · SHA-256 `2d3577fbaaacc7cb63e5b04a5a21572eeee1e0d55b223941d6a5496a91a427c8` · 5,637,024 B
 
 ---

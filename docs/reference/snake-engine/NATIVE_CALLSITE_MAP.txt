@@ -1,5 +1,6 @@
 # สกัด Native Call-Sites + Chain Install&Launch (libengine.so)
-สร้างอัตโนมัติ: extract_native_callsites.py · sources: /var/minis/workspace/snake_apk_extract/jadx_out/sources · /var/minis/shared/analysis/ghidra-extractjni-2026-09-12/output_extracted/output
+
+> **Provenance:** this analyst-generated map refers to separate JADX/Ghidra outputs that are not included in the Aether repository. The extraction log records selected hashes from the inspected package snapshot, but that does not independently verify every call site or runtime path in this map. Snake-specific only; not an Aether API or implementation guide.
 
 ## 1. Native methods (Native.java)
 | method | args | call sites |
