@@ -41,6 +41,12 @@ REQUIRED_FILES = [
     "flutter-app/pubspec.yaml",
     "scripts/verify_apk_architecture.py",
     "docs/host-container.md",
+    "android-host/src/main/kotlin/com/aether/host/runtime/AetherRuntime.kt",
+    "android-host/src/main/kotlin/com/aether/host/runtime/HostLifecycle.kt",
+    "android-host/src/test/kotlin/com/aether/host/runtime/AetherRuntimeTest.kt",
+    "android-host/src/flutterHost/kotlin/com/aether/host/MainActivity.kt",
+    "android-host/src/flutterHost/kotlin/com/aether/host/bridge/AetherRuntimeChannel.kt",
+    "android-host/src/main/kotlin/com/aether/host/MainActivityHostOnly.kt",
 ]
 
 PACKAGE = "com.aether.host.virtualization"
@@ -69,7 +75,7 @@ PROVIDERS = [
 
 SOURCE_CLASSES = {
     "AetherApplication": "android-host/src/main/kotlin/com/aether/host/AetherApplication.kt",
-    "MainActivity": "android-host/src/main/kotlin/com/aether/host/MainActivity.kt",
+    "MainActivity": "android-host/src/flutterHost/kotlin/com/aether/host/MainActivity.kt",
     "ProxyActivityP0": "android-host/src/main/kotlin/com/aether/host/virtualization/activity/ProxyActivity.kt",
     "ProxyActivityP1": "android-host/src/main/kotlin/com/aether/host/virtualization/activity/ProxyActivity.kt",
     "ProxyActivityP2": "android-host/src/main/kotlin/com/aether/host/virtualization/activity/ProxyActivity.kt",
@@ -198,7 +204,7 @@ def main() -> None:
     host_gradle = (ROOT / "android-host/build.gradle.kts").read_text()
     settings_gradle = (ROOT / "settings.gradle.kts").read_text()
     flutter_pubspec = (ROOT / "flutter-app/pubspec.yaml").read_text()
-    channel_source = (ROOT / "android-host/src/main/kotlin/com/aether/host/bridge/AetherRuntimeChannel.kt").read_text()
+    channel_source = (ROOT / "android-host/src/flutterHost/kotlin/com/aether/host/bridge/AetherRuntimeChannel.kt").read_text()
     if 'implementation(project(":flutter"))' not in host_gradle:
         fail("Android host must depend on the generated Flutter module")
     if 'flutter-app/.android/include_flutter.groovy' not in settings_gradle:

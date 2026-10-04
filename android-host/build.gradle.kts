@@ -48,10 +48,18 @@ android {
 
     sourceSets {
         getByName("main") {
-            kotlin.srcDir("src/main/kotlin")
+            // Flutter-dependent variant (FlutterActivity + AetherRuntimeChannel + MainActivity)
+            // ถูกรวมเมื่อ :flutter project มีจริง (bootstrap ด้วย flutter pub get)
+            if (findProject(":flutter") != null) {
+                kotlin.srcDirs("src/flutterHost/kotlin")
+                manifest.srcFile("src/flutterHost/AndroidManifest.xml")
+            } else {
+                // host-only: launcher = MainActivityHostOnly (stub ไม่ผูก flutter)
+                manifest.srcFile("src/main/AndroidManifest.xml")
+            }
         }
         getByName("test") {
-            kotlin.srcDir("src/test/kotlin")
+            kotlin.srcDirs("src/test/kotlin")
         }
     }
 
@@ -82,9 +90,11 @@ kotlin {
 dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
 
-    // Real add-to-app Flutter module: brings FlutterJNI/libflutter.so, Dart AOT
-    // support, and flutter_assets into the host APK.
-    implementation(project(":flutter"))
+    // Host-only builds (no Flutter SDK) omit this dependency; the engine is
+    // then provided at runtime by HostInitializer's reflection path.
+    if (findProject(":flutter") != null) {
+        implementation(project(":flutter"))
+    }
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.mockito:mockito-core:5.11.0")
