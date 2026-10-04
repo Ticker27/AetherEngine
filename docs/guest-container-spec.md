@@ -7,7 +7,7 @@ This document fixes the contracts that Phase 2 milestones M1–M5 implement: whi
 exist, who owns them, which thread each operation runs on, how guest lifecycle events flow,
 which error codes are stable, and what payloads the Flutter control plane exchanges.
 
-Everything in §2–§8 is a **proposed contract, not current behavior**. Statements about what
+Everything in §2–§9 is a **proposed contract, not current behavior**. Statements about what
 the host does today are marked *Exists today* and point at real source; nothing in this file
 should be read as a claim that a guest Activity can already run. The single-process MVP
 decision (2026-10-04) and the milestone scope live in [phase2-plan.md](phase2-plan.md); this
@@ -18,9 +18,9 @@ file is M0.1's deliverable inside that plan.
 | Document | Relationship |
 | --- | --- |
 | [phase2-plan.md](phase2-plan.md) | Milestones M0–M6, gap matrix, decision log, required inputs. This spec implements M0.1. |
-| [host-container.md](host-container.md) | Current capability inventory, proxy inventory, trust/security constraints. Source of §9 non-goals. |
+| [host-container.md](host-container.md) | Current capability inventory, proxy inventory, trust/security constraints. Source of §10 non-goals. |
 | [architecture.md](architecture.md) | Four ownership layers, separate guest APK lane, two JNI paths. |
-| [lifecycle.md](lifecycle.md) | Existing native/Flutter/proxy lifecycles and the relayed event list. Extended by §6/§7. |
+| [lifecycle.md](lifecycle.md) | Existing native/Flutter/proxy lifecycles and the relayed event list. Extended by §7/§8. |
 | [jni-contract.md](jni-contract.md) | Verified 4-method native contract; no guest JNI growth without evidence. |
 | [target-apk.md](target-apk.md) | Pinned guest identity (`com.miniclip.eightballpool` 56.30.0 / 4028) and signer pin. |
 | [reference/snake-engine/EVIDENCE_CHAIN.txt](reference/snake-engine/EVIDENCE_CHAIN.txt) | Architectural reference for install/launch chains. Nothing is ported from it. |
@@ -49,7 +49,7 @@ HostInitializer  ──owns──►  guest session (one at a time)
    registry. The registry stays a passive lifecycle index.
 3. The adapter owns guest framework objects only for the lifetime of a booking, and releases
    them on the slot's `destroyed` event. It must not outlive the proxy component it is bound to.
-4. Every object crossing a thread boundary is immutable or explicitly synchronized; see §5.
+4. Every object crossing a thread boundary is immutable or explicitly synchronized; see §6.
 5. No guest object is stored in the `MethodChannel` payload, in `flagger`, or in any static map
    keyed by guest class names. Guest identity is data (`GuestPackage`), not live references.
 
@@ -64,7 +64,7 @@ Immutable value model of one verified APK. No `Context`, no `ClassLoader`, no fi
 | `versionName` / `versionCode` | `String` / `Long` | manifest | Verified by `GuestApkTrustPolicy` before parsing. |
 | `minSdkVersion` / `targetSdkVersion` | `Int` | manifest uses-sdk | Recorded; not enforced (no SDK downgrades in Phase 2). |
 | `applicationClass` | `String?` | manifest `application@android:name` | Null when the guest has a default Application. |
-| `permissions` | `List<String>` | manifest `uses-permission` | Declared by the guest; the host maps them to the policy in §9. |
+| `permissions` | `List<String>` | manifest `uses-permission` | Declared by the guest; the host maps them to the policy in §10. |
 | `usesFeatures` | `List<String>` | manifest `uses-feature` | Recorded for diagnostics and M3's runtime-requirement note. |
 | `activities` / `services` / `receivers` / `providers` | `List<GuestComponent>` | manifest components | `GuestComponent(name, exported, process, intentFilters, authorities, permission, launchMode)`. |
 | `launcherActivity` | `String?` | component resolution | Result of `resolveLauncher()`; see below. |
@@ -77,7 +77,7 @@ Immutable value model of one verified APK. No `Context`, no `ClassLoader`, no fi
    `android.intent.category.LAUNCHER`.
 2. If several match, the first in manifest declaration order (deterministic).
 3. If none match, the first `MAIN` + `android.intent.category.INFO`.
-4. Otherwise the session is invalid → error `GUEST_LAUNCHER_NOT_FOUND` (§7).
+4. Otherwise the session is invalid → error `GUEST_LAUNCHER_NOT_FOUND` (§8).
 
 **Persistence**
 
@@ -99,12 +99,12 @@ a partial `Context` would fail at runtime in ways a `ContextWrapper` cannot.
 
 | Member | Backed by | Rule |
 | --- | --- | --- |
-| `getPackageName()` | `GuestPackage.packageName` | Returns the guest name; the host package name is never returned to guest code. This is a data substitution, not package-manager spoofing (§9). |
+| `getPackageName()` | `GuestPackage.packageName` | Returns the guest name; the host package name is never returned to guest code. This is a data substitution, not package-manager spoofing (§10). |
 | `getApplicationInfo()` / `getApplicationInfo()` | `GuestPackage` + `ApplicationInfo` built from it | `sourceDir`/`publicSourceDir` point at the verified read-only cached APK; `dataDir`/`deviceProtectedDataDir` at the guest VFS roots; the host UID/permissions are inherited and **not** rewritten. |
 | `getClassLoader()` | `GuestClassLoaderProxy` | Parent-first prefixes unchanged. |
-| `getAssets()`, `getResources()` | Spike A decision (§10) | Either the guest's own resource table, or the documented fallback: host resources with guest assets served through `GuestVirtualFileSystem`. Whichever is chosen is recorded here and in [architecture.md](architecture.md) before M3 starts. |
+| `getAssets()`, `getResources()` | Spike A decision (§11) | Either the guest's own resource table, or the documented fallback: host resources with guest assets served through `GuestVirtualFileSystem`. Whichever is chosen is recorded here and in [architecture.md](architecture.md) before M3 starts. |
 | `getFilesDir()`, `getCacheDir()`, `getCodeCacheDir()`, `getNoBackupFilesDir()`, `getDatabasePath()`, `getSharedPreferencesPath()` | `GuestVirtualFileSystem` | Every returned path lies below the guest root; `..`, absolute paths, and symlinks are rejected by the facade, never re-implemented. |
-| `getPackageManager()`, `getPackageInfo()` | **not virtualized** | Return host-package data. Recorded limitation; guests that depend on real package visibility are unsupported in Phase 2 (§9). |
+| `getPackageManager()`, `getPackageInfo()` | **not virtualized** | Return host-package data. Recorded limitation; guests that depend on real package visibility are unsupported in Phase 2 (§10). |
 | `getSystemService()` | host | Real host services. Documented consequence: a guest sees the host's services, which is part of the "not a sandbox" statement, not a feature. |
 
 `GuestContext` is created once per session, on a worker thread, and is then read-only.
@@ -130,7 +130,7 @@ FREE ──book──► RESERVED ──attach──► BOUND ──onResumed─
 | Rule | Definition |
 | --- | --- |
 | Exclusive booking | One booking per slot. A slot already in `RESERVED`/`BOUND`/`ACTIVE` cannot be booked again. |
-| One active guest slot | At most one slot in `ACTIVE` at a time. A second launch while a guest Activity is `RESUMED` is refused with `GUEST_SLOT_UNAVAILABLE` rather than stealing focus. Phase 2 has no real task stack (§9). |
+| One active guest slot | At most one slot in `ACTIVE` at a time. A second launch while a guest Activity is `RESUMED` is refused with `GUEST_SLOT_UNAVAILABLE` rather than stealing focus. Phase 2 has no real task stack (§10). |
 | Orientation preference | `book(orientation)` prefers the `_L` variant when the host configuration is landscape, otherwise the portrait variant. Fallback to the other variant is allowed and recorded in the booking result. |
 | Selection order | Free slots are chosen lowest index first (`P0` → `P3`), then the orientation variant of the same index. Deterministic, so tests and diagnostics are reproducible. |
 | Generation check | The adapter re-reads `VirtualActivitySlotSnapshot.generation` before each guest lifecycle forward. A mismatch (the slot was recreated) aborts with `GUEST_LIFECYCLE_REJECTED` instead of calling guest code on a stale Activity. |
@@ -138,9 +138,49 @@ FREE ──book──► RESERVED ──attach──► BOUND ──onResumed─
 | No retention | The scheduler stores slot ids, generations, and guest component names — never Activity, Service, or guest framework references. Same rule as the registry. |
 
 `VirtualActivitySlotRegistry` is used read-only for this purpose (`snapshot()`); Phase 2 adds no
-new state to it. The M5 diagnostics screen reads the same snapshots (§8.4).
+new state to it. The M5 diagnostics screen reads the same snapshots (§9.4).
 
-## 5. Thread rules
+## 5. `GuestRuntimeAdapter` — binding guest components into a booked slot (M3)
+
+One adapter instance per booked slot. It is the only object that touches guest framework
+objects, and it exists exactly as long as its booking.
+
+| State | Type | Notes |
+| --- | --- | --- |
+| `guestPackage` | `GuestPackage` | Immutable; never re-read during a binding. |
+| `context` | `GuestContext` | Session-wide instance (§3), built at install time on a worker thread and shared read-only by every slot. |
+| `booking` | `GuestBooking` | `slot`, `proxyType`, `generation`, `landscape` — copied from `GuestSlotScheduler` at booking time. |
+| `guestApplication` | `Any?` | The guest's `android.app.Application` instance while bound; typed loosely because the class comes from guest DEX. |
+| `boundComponent` | `String?` | Guest Activity class name currently attached to the slot. |
+| `attached` | `Boolean` | Whether the guest view hierarchy is attached to the proxy Activity's content view. |
+
+**Responsibilities** (all on the main thread, per §6)
+
+1. `attach()` on the slot's `created` event, in this order: require `flagger(GUEST_CONTAINER)` and a
+   live booking → re-check the slot generation against §4 → construct the guest `Application`
+   through `GuestClassLoaderProxy` → `attachBaseContext(GuestContext)` → `onCreate()` → construct
+   `GuestPackage.launcherActivity` and attach its guest view to the slot. Any failure unwinds what
+   it created and reports the §8 code; a partially bound slot is never left behind.
+2. `forwardLifecycle(event)` for every later slot event, mapping host → guest callbacks:
+   `started→onStart`, `resumed→onResume`, `paused→onPause`, `stopped→onStop`,
+   `destroyed→onDestroy`. `save_instance_state` and `new_intent` are recorded and surfaced in the
+   event stream but not forwarded to guest code in Phase 2 — no guest task state exists (§10);
+   this is a documented limit, not a silent drop.
+3. `release()` on the slot's `destroyed` event: detach the guest view, call `onDestroy`, clear
+   `guestApplication` and `boundComponent`, return the booking to the scheduler. Idempotent.
+
+**Invariants**
+
+- One adapter per slot; a second `attach()` on the same slot is refused with
+  `GUEST_LIFECYCLE_REJECTED`.
+- The adapter holds no Activity/Service reference beyond its own binding lifetime and never
+  places one in the registry, in `flagger`, or in a channel payload (§1 rule 5).
+- Guest callbacks receive exactly the context surface defined in §3; the adapter never patches
+  framework identity or permissions.
+- No blocking I/O runs inline in a listener callback: asset/resource reads go to the guest
+  worker executor and their results are applied back on the main thread (§6).
+
+## 6. Thread rules
 
 | Operation | Required thread | Rationale / enforcement |
 | --- | --- | --- |
@@ -162,9 +202,9 @@ Exception: `HostInitializer.dispatch` is synchronous today and stays synchronous
 need asynchronous dispatch, that is a separate documented change to `lifecycle.md`, not an
 implicit behavior shift.
 
-## 6. Event flow
+## 7. Event flow
 
-### 6.1 Install (M1 + M5)
+### 7.1 Install (M1 + M5)
 
 ```text
 Flutter  guestInstall(request)                        [main]
@@ -177,7 +217,7 @@ Flutter  guestInstall(request)                        [main]
   ← identity result (Map)                              [any thread, once]
 ```
 
-### 6.2 Launch (M3 + M5)
+### 7.2 Launch (M3 + M5)
 
 ```text
 Flutter  guestLaunch(request)                          [main]
@@ -195,7 +235,7 @@ Flutter  guestLaunch(request)                          [main]
   ← {slot, generation, activityClass}                   [any, once]
 ```
 
-### 6.3 Close and shutdown
+### 7.3 Close and shutdown
 
 ```text
 guestClose → finish() on the booked proxy Activity → destroyed → adapter.release()
@@ -203,7 +243,7 @@ guestClose → finish() on the booked proxy Activity → destroyed → adapter.r
 HostInitializer.shutdown() → all bookings released → guest_closed for each → registry.clear()
 ```
 
-### 6.4 Event vocabulary
+### 7.4 Event vocabulary
 
 Existing lifecycle strings relayed by the proxies (unchanged): `created`, `started`, `resumed`,
 `paused`, `stopped`, `save_instance_state`, `destroyed`, `new_intent` (Activity); `created`,
@@ -218,12 +258,12 @@ New host-level strings, all with `kind = HOST`, `slot = null` unless noted:
 | `guest_launch_failed` | Booking, resolution, or bind failed | attempted slot or `null` | Always accompanied by `GUEST_*` error code in the payload. |
 | `guest_launched` | Guest Activity resumed in a slot | booked slot | `intent` carries the host Intent, never the guest's own Intent object. |
 | `guest_closed` | Booking released or `shutdown()` | released slot | |
-| `guest_error` | Any guest-scoped failure surfaced to listeners | `null` | Payload uses §7 codes. |
+| `guest_error` | Any guest-scoped failure surfaced to listeners | `null` | Payload uses §8 codes. |
 
 Listener contract is unchanged: listeners are called synchronously on the main thread and must
 not retain `owner` past its destroy/stop event.
 
-## 7. Stable error codes
+## 8. Stable error codes
 
 Codes are stable strings. Dart may match on them; messages may change. No exception class name,
 stack trace, file path outside the app sandbox, or guest-supplied string may appear in
@@ -243,7 +283,7 @@ guest ops use the fixed `detail` strings in the last column instead).
 | `GUEST_RESOURCES_UNSUPPORTED` | Resource path unavailable per Spike A decision | no | `resources_unavailable` |
 | `GUEST_BIND_FAILED` | Guest Application/Activity construction or attach threw | no, until guest closes | `bind_failed` |
 | `GUEST_LIFECYCLE_REJECTED` | Slot generation mismatch or out-of-order callback | yes, with a fresh booking | `generation_mismatch` |
-| `GUEST_PERMISSION_DENIED` | Guest permission denied by host policy (§9) | no | `permission_denied` |
+| `GUEST_PERMISSION_DENIED` | Guest permission denied by host policy (§10) | no | `permission_denied` |
 | `GUEST_NOT_IMPLEMENTED` | Op exists on the channel but its milestone has not landed | no | `not_implemented` |
 | `GUEST_INTERNAL` | Unexpected host failure in the guest path | yes | `internal_error` |
 
@@ -251,14 +291,14 @@ Existing host codes are untouched: `UNSATISFIED_LINK`, `NATIVE_ERROR`, and `notI
 for unknown methods. Trust failures always map to `GUEST_TRUST_REJECTED`; the underlying
 `UntrustedGuestApkException` message stays in the log only.
 
-## 8. M5 payload contract
+## 9. M5 payload contract
 
 Request/response ops stay on the existing channel `aether/runtime`
 (`MethodChannel('aether/runtime')`, unchanged in both Dart and Kotlin). The event stream uses a
 new `EventChannel("aether/guest-events")`. All maps use `String` keys and JSON-compatible
 values; `null` means "absent", never "unknown".
 
-### 8.1 `guestInstall`
+### 9.1 `guestInstall`
 
 Request: `{"source": "<absolute path>", "signerPins": ["<sha256 hex>"]}`
 (`signerPins` optional only if the host build supplies pins from configuration; an empty list
@@ -281,17 +321,17 @@ Response `GuestIdentity`:
 }
 ```
 
-### 8.2 `guestLaunch`
+### 9.2 `guestLaunch`
 
 Request: `{"slot": 0}` where `slot` is optional (`null` = automatic selection per §4).
 Response `GuestLaunchResult`: `{"slot": 0, "proxyType": "standard-p0", "generation": 1,
 "landscape": false, "activityClass": "…"}`.
 
-### 8.3 `guestClose`
+### 9.3 `guestClose`
 
 Request: `{"slot": 0}` (optional; `null` closes the active booking). Response: `null`.
 
-### 8.4 `guestState`
+### 9.4 `guestState`
 
 Response `GuestSessionState`:
 
@@ -317,7 +357,7 @@ Response `GuestSessionState`:
 `slots[]` is exactly the `VirtualActivitySlotSnapshot` projection — the registry stays the
 single source of truth for slot phases. `lastError` is `null` when nothing failed.
 
-### 8.5 `guestEvents` stream
+### 9.5 `guestEvents` stream
 
 Each event: `{"seq": 12, "at": 1760000000000, "kind": "ACTIVITY", "lifecycle": "resumed",
 "proxyType": "standard-p0", "slot": 0, "generation": 1, "guestPackageName": "…",
@@ -326,10 +366,10 @@ Each event: `{"seq": 12, "at": 1760000000000, "kind": "ACTIVITY", "lifecycle": "
 - `seq` is monotonic per attachment; Dart may use it to detect gaps after a UI pause.
 - `kind` ∈ `HOST`, `ACTIVITY`, `SERVICE`, `JOB_SERVICE`, `BROADCAST_RECEIVER`,
   `CONTENT_PROVIDER`, `VPN_SERVICE` (existing `HostComponentKind`).
-- `errorCode` is a §7 code or `null`; it is the only error field in the stream.
+- `errorCode` is a §8 code or `null`; it is the only error field in the stream.
 - Stream events are emitted on the main thread; the Dart side must not block in the handler.
 
-### 8.6 Dart surface
+### 9.6 Dart surface
 
 `AetherChannel` gains `guestInstall`/`guestLaunch`/`guestClose`/`guestState` and an
 `EventChannel('aether/guest-events')` subscription, all wrapped by `NativeService` so
@@ -337,7 +377,7 @@ Each event: `{"seq": 12, "at": 1760000000000, "kind": "ACTIVITY", "lifecycle": "
 `StateError` with `code`/`detail` on `PlatformException`, matching the existing wrappers.
 Unknown methods keep returning `notImplemented` on the Kotlin side.
 
-## 9. Non-goals (Phase 2 — inherited from `phase2-plan.md` §1)
+## 10. Non-goals (Phase 2 — inherited from `phase2-plan.md` §1)
 
 These must not regress; each is a deliberate limit, not a backlog item hidden in the spec.
 
@@ -363,28 +403,29 @@ These must not regress; each is a deliberate limit, not a backlog item hidden in
    `GUEST_CONTAINER` both default to disabled, and flags are not a security boundary — the
    trust policy is.
 
-## 10. Open decisions carried by M0
+## 11. Open decisions carried by M0
 
 | # | Decision | Blocking | Recorded in |
 | --- | --- | --- | --- |
 | M0.2 | Resource/asset access path for a private APK (public path · `addAssetPath` · documented fallback) | M2, then M3 | §3 table row `getResources()` + [architecture.md](architecture.md) |
 | M0.3 | Manifest parsing path (`getPackageArchiveInfo` vs in-house AXML reader) | M1 | §2 field set + `verify_host_structure.py` fixture test |
 | M0.4 | Fixture guest APK (prebuilt vs Gradle-built, license/notice) | all CI tests | M0.4 record |
-| M0.5 | Production wiring for `AetherRuntime.bootstrap` (candidate `AetherApplication.onCreate`), the install-op surface that calls `HostInitializer.loadTargetApk`, the `flagger` toggle path, and the `message_bridge` payload contract | M3, M5 | §6.1, §8.6 |
+| M0.5 | Production wiring for `AetherRuntime.bootstrap` (candidate `AetherApplication.onCreate`), the install-op surface that calls `HostInitializer.loadTargetApk`, the `flagger` toggle path, and the `message_bridge` payload contract | M3, M5 | §7.1, §9.6 |
 
 Open inputs that only the user can supply (plan §6): test device/emulator details (#4),
 confirmation of authorization to run/inspect the target APK (#5), optional logcat (#6). None of
 them blocks M0–M2.
 
-## 11. Traceability
+## 12. Traceability
 
 | Spec section | Milestone | Verified by |
 | --- | --- | --- |
 | §2 `GuestPackage` + persistence | M1 | JVM tests against the in-repo manifest fixture; parse → persist → reload determinism test |
 | §3 `GuestContext` | M2 | Instrumented test loading a guest string, asset, and theme attribute |
 | §4 scheduler | M3 | JVM tests for booking, contention, orientation preference, release idempotency |
-| §5 thread rules | M1–M3 | Code review gate + instrumentation assertions that guest lifecycle runs on the main looper |
-| §6 event flow | M1, M3, M4 | Instrumentation observing `guest_installed`/`guest_launched`/`guest_closed` through the relay |
-| §7 error codes | M1, M3, M5 | One JVM/channel test per code; Dart wrappers matched against the table |
-| §8 M5 payloads | M5 | Dart channel-wrapper tests + recorded manual run-through |
-| §9 non-goals | all | `verify_host_structure.py` manifest/exported rules; review checklist in [host-container.md](host-container.md) |
+| §5 `GuestRuntimeAdapter` | M3 | Instrumentation asserting guest `Application.onCreate` + `Activity.onCreate/onResume` through the relay, and that `release()` is idempotent |
+| §6 thread rules | M1–M3 | Code review gate + instrumentation assertions that guest lifecycle runs on the main looper |
+| §7 event flow | M1, M3, M4 | Instrumentation observing `guest_installed`/`guest_launched`/`guest_closed` through the relay |
+| §8 error codes | M1, M3, M5 | One JVM/channel test per code; Dart wrappers matched against the table |
+| §9 M5 payloads | M5 | Dart channel-wrapper tests + recorded manual run-through |
+| §10 non-goals | all | `verify_host_structure.py` manifest/exported rules; review checklist in [host-container.md](host-container.md) |
