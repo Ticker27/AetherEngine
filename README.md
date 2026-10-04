@@ -45,10 +45,11 @@ android-host/src/main/kotlin/com/aether/host/
 ├── bridge/
 │   ├── Native.kt                         # custom libaether.so facade (4 known methods)
 │   └── AetherRuntimeChannel.kt            # Flutter platform-message handler
-├── bootstrap/HostInitializer.kt          # process/native and proxy lifecycle coordinator
+├── bootstrap/                            # HostInitializer + P0..P3 lifecycle registry
 ├── target/TargetApkContract.kt            # pinned external guest release identity
 └── virtualization/
-    ├── loader/                            # APK loading + signer policy
+    ├── filesystem/                        # app-private guest VFS facade (explicit callers only)
+    ├── loader/                            # APK verification + guest-first ClassLoader proxy
     ├── activity/                          # VirtualActivity and proxy Activity pools
     ├── components/                        # service/provider/receiver proxies
     ├── flags/flagger.kt                   # process-local host feature switches
@@ -61,9 +62,9 @@ android-host/src/main/assets/snake/
 
 aether-native/                             # C++ source for libaether.so
 flutter-app/                               # Flutter module: Dart UI, logic, channels, assets
-scripts/verify_host_structure.py          # source/manifest registration check
+scripts/verify_host_structure.py          # source/manifest/component registration check
 scripts/verify_apk_architecture.py        # packaged APK binary/asset check
-scripts/verify_snake_payload.py           # imported Snake assets/res inventory check
+scripts/verify_snake_payload.py            # imported Snake assets/res inventory check
 docs/                                      # host architecture, target contract, lifecycle, JNI
 └── reference/snake-engine/                 # compact Snake virtualization-host analysis
 ```
@@ -86,6 +87,7 @@ flutter pub get
 cd ..
 ./gradlew :android-host:assembleDebug :android-host:assembleRelease :android-host:test
 python3 scripts/verify_host_structure.py
+python3 scripts/verify_snake_payload.py
 python3 scripts/verify_apk_architecture.py android-host/build/outputs/apk/debug/android-host-debug.apk debug
 python3 scripts/verify_apk_architecture.py android-host/build/outputs/apk/release/android-host-release-unsigned.apk release
 ```

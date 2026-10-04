@@ -56,6 +56,7 @@ enum class HostInitializerState {
 class HostInitializer(application: Application) : HostRuntimeInitializer {
     private val appContext = application.applicationContext
     private val listeners = CopyOnWriteArraySet<HostComponentListener>()
+    private val activitySlots = VirtualActivitySlotRegistry()
 
     @Volatile
     var state: HostInitializerState = HostInitializerState.NEW
@@ -130,6 +131,9 @@ class HostInitializer(application: Application) : HostRuntimeInitializer {
         listeners -= listener
     }
 
+    /** Returns lifecycle snapshots for the fixed P0..P3 proxy pools without retaining Activities. */
+    fun virtualActivitySlotSnapshots(): List<VirtualActivitySlotSnapshot> = activitySlots.snapshot()
+
     /** Called by the non-exported proxy components to relay lifecycle into the host. */
     fun dispatch(event: HostComponentEvent) {
         val enrichedEvent = if (event.guestPackageName == null) {
@@ -137,6 +141,7 @@ class HostInitializer(application: Application) : HostRuntimeInitializer {
         } else {
             event
         }
+        activitySlots.record(enrichedEvent)
         listeners.forEach { listener ->
             try {
                 listener.onComponentEvent(enrichedEvent)
@@ -161,6 +166,7 @@ class HostInitializer(application: Application) : HostRuntimeInitializer {
             )
         }
         loadedGuest = null
+        activitySlots.clear()
 
         try {
             if (state == HostInitializerState.READY) Native.shutdown()

@@ -5,7 +5,7 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.content.pm.Signature
 import android.os.Build
-import dalvik.system.DexClassLoader
+import com.aether.host.virtualization.filesystem.GuestVirtualFileSystem
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
@@ -16,7 +16,8 @@ data class LoadedGuestApk internal constructor(
     val versionName: String,
     val versionCode: Long,
     val apkFile: File,
-    val classLoader: ClassLoader,
+    val classLoader: GuestClassLoaderProxy,
+    val fileSystem: GuestVirtualFileSystem,
     val apkSha256: String,
     val signerSha256: Set<String>,
 )
@@ -29,9 +30,11 @@ class GuestApkLoadException(message: String, cause: Throwable? = null) :
  * exact target package/version and signer pins, then creates a DexClassLoader for its DEX code.
  *
  * This is a code loader, not an Android sandbox or a complete Activity virtualization
- * engine. Loaded code runs inside this process with the host UID and permissions. Native
- * libraries, guest resources, package-manager virtualization, and arbitrary guest
- * Activity attachment are intentionally not handled here.
+ * engine. Loaded code runs inside this process with the host UID and permissions. The returned
+ * class-loader proxy only controls Java class delegation, and the returned file-system facade
+ * only governs calls made through that facade; neither intercepts arbitrary guest code. Native
+ * libraries, Android resources, package-manager virtualization, and Activity attachment remain
+ * unsupported.
  */
 class DynamicApkLoader(
     context: Context,
@@ -114,7 +117,10 @@ class DynamicApkLoader(
             val cachedGuest = loadedByDigest[cachedDigest]
             if (cachedGuest != null) return cachedGuest
 
-            val optimizedDirectory = File(appContext.codeCacheDir, DEX_CACHE_DIRECTORY)
+            val optimizedDirectory = File(
+                File(appContext.codeCacheDir, DEX_CACHE_DIRECTORY),
+                cachedDigest,
+            )
             if (!optimizedDirectory.exists() && !optimizedDirectory.mkdirs()) {
                 throw GuestApkLoadException("Could not create DEX optimization directory")
             }
@@ -125,17 +131,23 @@ class DynamicApkLoader(
             val guestVersionName = cachedInfo.versionName
                 ?: throw GuestApkLoadException("Guest APK has no version name")
             val guest = try {
+                val guestFileSystem = GuestVirtualFileSystem.forGuest(
+                    noBackupFilesDir = appContext.noBackupFilesDir,
+                    packageName = cachedInfo.packageName,
+                    versionCode = cachedInfo.compatVersionCode(),
+                    apkSha256 = cachedDigest,
+                )
                 LoadedGuestApk(
                     packageName = cachedInfo.packageName,
                     versionName = guestVersionName,
                     versionCode = cachedInfo.compatVersionCode(),
                     apkFile = cachedApk,
-                    classLoader = DexClassLoader(
+                    classLoader = GuestClassLoaderProxy(
                         cachedApk.absolutePath,
                         optimizedDirectory.absolutePath,
-                        null,
                         appContext.classLoader,
                     ),
+                    fileSystem = guestFileSystem,
                     apkSha256 = cachedDigest,
                     signerSha256 = cachedSigners,
                 )

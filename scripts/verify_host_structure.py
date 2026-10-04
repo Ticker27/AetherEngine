@@ -16,11 +16,14 @@ REQUIRED_FILES = [
     "android-host/src/main/kotlin/com/aether/host/AetherApplication.kt",
     "android-host/src/main/kotlin/com/aether/host/bootstrap/HostInitializer.kt",
     "android-host/src/main/kotlin/com/aether/host/bootstrap/HostRuntimeInitializer.kt",
+    "android-host/src/main/kotlin/com/aether/host/bootstrap/VirtualActivitySlotRegistry.kt",
     "android-host/src/main/kotlin/com/aether/host/bridge/Native.kt",
     "android-host/src/main/kotlin/com/aether/host/bridge/AetherRuntimeChannel.kt",
     "android-host/src/main/kotlin/com/aether/host/target/TargetApkContract.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/loader/DynamicApkLoader.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/loader/GuestApkTrustPolicy.kt",
+    "android-host/src/main/kotlin/com/aether/host/virtualization/loader/GuestClassLoaderProxy.kt",
+    "android-host/src/main/kotlin/com/aether/host/virtualization/filesystem/GuestVirtualFileSystem.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/activity/VirtualActivity.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/activity/ProxyActivity.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/activity/ProxyPendingActivity.kt",
@@ -48,6 +51,9 @@ REQUIRED_FILES = [
     "android-host/src/main/kotlin/com/aether/host/runtime/AetherRuntime.kt",
     "android-host/src/main/kotlin/com/aether/host/runtime/HostLifecycle.kt",
     "android-host/src/test/kotlin/com/aether/host/runtime/AetherRuntimeTest.kt",
+    "android-host/src/test/kotlin/com/aether/host/bootstrap/VirtualActivitySlotRegistryTest.kt",
+    "android-host/src/test/kotlin/com/aether/host/virtualization/loader/GuestClassLoaderProxyTest.kt",
+    "android-host/src/test/kotlin/com/aether/host/virtualization/filesystem/GuestVirtualFileSystemTest.kt",
     "android-host/src/main/kotlin/com/aether/host/MainActivity.kt",
 ]
 
@@ -242,7 +248,7 @@ def main() -> None:
     if 'com/aether/host/bridge/Native' not in registry_source:
         fail("JNI registry class path does not match the Native Kotlin package")
 
-    print("Host-container, Flutter embedding, JNI, and manifest structures are consistent.")
+    print("Host container, guest loader/VFS foundations, Flutter embedding, JNI, and manifest structures are consistent.")
 
 
 if __name__ == "__main__":
