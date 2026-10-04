@@ -111,3 +111,4 @@ The release APK is unsigned by this CI build and must be signed for distribution
 - [Four-layer architecture and binary mapping](docs/architecture.md)
 - [JNI contract and unknown target signatures](docs/jni-contract.md)
 - [Android/native/Flutter lifecycle](docs/lifecycle.md)
+- [Phase 2 plan: guest container milestones](docs/phase2-plan.md)
