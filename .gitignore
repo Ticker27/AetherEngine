@@ -38,5 +38,5 @@ flutter/aether-console/pubspec.lock
 # OS
 .DS_Store
 
-# Target APKs (verified out-of-band; never commit per docs/target-apk.md)
+# Target APKs (verified out-of-band; never committed)
 local/

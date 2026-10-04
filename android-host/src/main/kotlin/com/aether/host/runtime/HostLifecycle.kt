@@ -8,7 +8,7 @@ import com.aether.host.bootstrap.HostRuntimeInitializer
 
 /**
  * HostLifecycle — relays proxy component lifecycle events into the host's
- * component event bus (Snake zh/jv0 reference).
+ * component event bus.
  *
  * Attach once during AetherRuntime.bootstrap(); detach during shutdown().
  * This class holds no Android framework references beyond the listener

@@ -16,7 +16,6 @@ import com.aether.host.virtualization.flags.flagger
  *   2. NativeModule  — libaether.so runtime state (initialize/shutdown)
  *   3. HostModule    — proxy component lifecycle (VirtualActivity/HostLifecycle)
  *
- * The order mirrors the reference container architecture (Snake EVIDENCE_CHAIN step A).
  * This class does not replace [HostInitializer]; it composes it.
  */
 object AetherRuntime {

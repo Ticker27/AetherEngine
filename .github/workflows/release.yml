@@ -1,0 +1,124 @@
+name: AetherEngine Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: aether-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, Test & Publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.0"
+          cache: true
+
+      - name: Resolve Flutter module dependencies
+        working-directory: flutter-app
+        run: flutter pub get
+
+      - name: Configure Flutter SDK path for Gradle
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'flutter.sdk=%s\n' "$FLUTTER_ROOT" > local.properties
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" >> local.properties
+
+      - name: Set up Android NDK and CMake
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "$SDKM" --install "platforms;android-36" "build-tools;36.0.0" "ndk;26.3.11579264" "cmake;3.22.1" >/dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264" >> "$GITHUB_ENV"
+
+      - name: Make Gradle executable
+        run: chmod +x ./gradlew
+
+      - name: Verify repository structure
+        run: python3 scripts/verify_host_structure.py
+
+      - name: Assemble debug and release APKs
+        run: ./gradlew :android-host:assembleDebug :android-host:assembleRelease --stacktrace --console=plain
+
+      - name: Run Android host unit tests
+        run: ./gradlew :android-host:test --stacktrace
+
+      - name: Run native test suite (host-side)
+        run: sh scripts/native_tests.sh
+
+      - name: Verify Android, custom-native, Flutter, and Dart binaries
+        run: |
+          python3 scripts/verify_apk_architecture.py android-host/build/outputs/apk/debug/android-host-debug.apk debug
+          python3 scripts/verify_apk_architecture.py android-host/build/outputs/apk/release/android-host-release-unsigned.apk release
+
+      - name: Analyze and test Flutter source
+        working-directory: flutter-app
+        run: |
+          flutter analyze
+          flutter test
+
+      - name: Write release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/aether-release-notes.md <<'NOTES'
+          AetherEngine host-container APKs built from this tag.
+
+          **Artifacts**
+          - `android-host-debug.apk` - host build with the Flutter debug runtime.
+          - `android-host-release-unsigned.apk` - release host build; **unsigned**, it must be signed before distribution.
+          - `SHA256SUMS.txt` - SHA-256 checksums for both APKs.
+
+          **What this build contains**
+          - The Kotlin host: `AetherApplication`, `HostInitializer`, the `VirtualActivity` proxy pools, `DynamicApkLoader`, `GuestClassLoaderProxy`, and `GuestVirtualFileSystem`.
+          - `libaether.so` with the verified four-method JNI contract.
+          - The embedded Flutter/Dart application and, in release, Dart AOT `libapp.so`.
+
+          **Limits**
+          - This is the host-container foundation, not an Android sandbox: any loaded guest code shares the host UID and permissions.
+          - The guest loader verifies the pinned 8 Ball Pool 56.30.0 (version code 4028) identity plus configured signer pins, then loads DEX only. It does not launch a guest Activity, merge guest resources, load guest native libraries, or isolate namespaces.
+          - The target APK is not bundled; runtime loading requires the separately verified APK and its signer pins.
+          NOTES
+
+      - name: Publish GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha256sum \
+            android-host/build/outputs/apk/debug/android-host-debug.apk \
+            android-host/build/outputs/apk/release/android-host-release-unsigned.apk \
+            > android-host/build/outputs/apk/SHA256SUMS.txt
+          assets=(
+            android-host/build/outputs/apk/debug/android-host-debug.apk
+            android-host/build/outputs/apk/release/android-host-release-unsigned.apk
+            android-host/build/outputs/apk/SHA256SUMS.txt
+          )
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --title "AetherEngine $GITHUB_REF_NAME" \
+              --notes-file /tmp/aether-release-notes.md \
+              "${assets[@]}"
+          fi
