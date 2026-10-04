@@ -225,6 +225,13 @@ jobs:
                           net.append((p, i, line.strip()))
           chk(not net, f"no socket/connect/sendto/recvfrom usage in main sources (hits: {net})")
 
+          # 8) CI artifact label must match the Gradle module name (D-A15.1)
+          modules = re.findall(r'include\("(:[\w-]+)"\)', open("settings.gradle.kts").read())
+          ci_txt = open(".github/workflows/ci.yml").read()
+          labels = re.findall(r"name:\s*([\w-]+)-apks-\$\{\{ github\.sha \}\}", ci_txt)
+          chk(modules == [":android-host"] and labels == ["android-host"],
+              f"CI artifact label matches settings.gradle.kts module (modules={modules}, labels={labels})")
+
           print("\nRESULT:", "ALL CHECKS PASSED" if not fail else f"{len(fail)} FAILURES: {fail}")
           sys.exit(1 if fail else 0)
           PYEOF

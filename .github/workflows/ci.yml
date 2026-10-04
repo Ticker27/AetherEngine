@@ -122,7 +122,7 @@ jobs:
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: aether-host-apks-${{ github.sha }}
+          name: android-host-apks-${{ github.sha }}
           path: |
             android-host/build/outputs/apk/debug/android-host-debug.apk
             android-host/build/outputs/apk/release/android-host-release-unsigned.apk
