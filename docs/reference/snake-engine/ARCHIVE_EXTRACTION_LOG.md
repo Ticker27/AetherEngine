@@ -1,6 +1,6 @@
 # Static extraction log: Snake payload folders
 
-This log records a static inspection of the uploaded `docs/snake.zip`. The ZIP was used as an extraction input and is **not retained** in the final tree; only its `snake/assets/` and `snake/res/` folders were selected. No DEX, `resources.arsc`, or `.so` file from Snake was copied into Aether.
+This log records a static inspection of the uploaded `docs/snake.zip`. That package ZIP was used as an extraction input and is **not retained** in the final tree; only its `snake/assets/` and `snake/res/` folders were selected. No DEX, `resources.arsc`, or `.so` file from Snake was copied into Aether. The separately retained `docs/com.snake.zip` is a runtime-data snapshot, not this package archive and not an extraction source; see [`RUNTIME_SNAPSHOT_REVIEW.md`](RUNTIME_SNAPSHOT_REVIEW.md).
 
 ## Source identity and size
 
@@ -39,5 +39,5 @@ The payload verifier checks file counts, byte totals, and deterministic tree has
 ## Snapshot mismatches and external claims
 
 - `หลักฐาน-snake-dex-manifest.txt` describes an older pair: DEX 3,868,092 bytes / MD5 `006e396872a920cb16a71cf12a7327a3` and manifest 54,228 bytes / MD5 `379ad4c8599ef1c889e079e4b4e4b11c`; it labels that manifest `versionName=2.1.3`. Those hashes do not match the inspected archive, whose manifest says `2.2.6`.
-- `EVIDENCE_CHAIN.txt` and `NATIVE_CALLSITE_MAP.txt` cite additional external inputs, including `comsnake-live` and a separate `com.ninja.engine.zip`, which were not members of `docs/snake.zip`. Their claims about a specific 8 Ball Pool build or runtime success are not established by the ZIP. Keep them as separate analyst notes, not as Aether implementation instructions.
+- `EVIDENCE_CHAIN.txt` and `NATIVE_CALLSITE_MAP.txt` cite additional inputs, including external `comsnake-live` and `com.ninja.engine.zip`. These were not members of `docs/snake.zip`; the later-added `docs/com.snake.zip` is a third, separate runtime-data snapshot reviewed in [`RUNTIME_SNAPSHOT_REVIEW.md`](RUNTIME_SNAPSHOT_REVIEW.md). Its limited inventory does not establish a specific game APK, successful runtime launch, or Aether capability. Keep all such analyses separate from the curated Snake assets/resources and do not treat them as Aether implementation instructions.
 - The Snake `.so` files were not ported. Aether continues to build its own `libaether.so` and obtains its own `libapp.so`/`libflutter.so` from the Flutter toolchain. Snake binaries are not signer pins or evidence of compatibility with 8 Ball Pool 56.30.0.

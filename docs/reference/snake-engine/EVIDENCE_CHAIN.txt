@@ -1,6 +1,6 @@
 # SNAKE Engine — เส้นทางการเชื่อมโยงการโหลดเกม (Chain of Evidence)
 
-> **Provenance and scope:** this narrative combines static analysis with external runtime artifacts (including `comsnake-live`, a runtime dump called `com.snake.zip` in this report, and `com.ninja.engine.zip`) that are not included in the compact Aether payload or the inspected `docs/snake.zip` package archive. Those runtime claims cannot be reproduced from the retained files. The extraction log records package assets/resources and manifest facts from the inspected archive, not successful guest-game execution. This is a Snake-only analyst report, not an Aether implementation guide or evidence for 8 Ball Pool 56.30.0.
+> **Provenance and scope:** this narrative combines static reverse-engineering notes with several distinct runtime-data sources. `docs/snake.zip` was a historical static package archive used only for the `assets/` and `res/` payload recorded in the extraction log. `docs/com.snake.zip` is a separately retained app-data snapshot, reviewed in [`RUNTIME_SNAPSHOT_REVIEW.md`](RUNTIME_SNAPSHOT_REVIEW.md); it is not an APK and contains no `.apk`, `.dex`, or `.so` members. Other sources cited below—such as `comsnake-live`, `com.snake_1.zip`, and `com.ninja.engine.zip`—are separate external inputs and must not be conflated with that retained ZIP. The retained snapshot records package metadata and persisted state, but does not independently establish a successful guest-game launch. The code-path narrative is an analyst interpretation, not proof of runtime success. This is a Snake-only analyst report, not an Aether implementation guide or evidence for 8 Ball Pool 56.30.0.
 
 วันที่ตรวจสอบ: 2026-09-12 · Engine: Snake Engine v2.2.6 (`com.snake`) · เกมต้นแบบ: `com.miniclip.eightballpool`
 
@@ -164,19 +164,21 @@ if (l != null) F(l, userId);       // → dv0.C(intent, userId) → g00.n0() [bi
 
 ---
 
-## 3. รายงานข้อมูล Runtime จาก artifact ภายนอก (ชื่อ `com.snake.zip`)
+## 3. รายงานข้อมูลจาก runtime-data snapshot ที่เก็บใน repo (`docs/com.snake.zip`)
 
-> รายการด้านล่างถอดจาก runtime bundle/report ภายนอก ไม่ใช่สมาชิกของ `docs/snake.zip` ที่ใช้สกัด `assets/` และ `res/`; ไฟล์ต้นฉบับและขั้นตอนทำซ้ำไม่ได้เก็บใน repository จึงถือเป็นข้อสังเกตที่รายงานไว้ ไม่ใช่ผลตรวจอิสระหรือหลักฐานว่า Aether รันเกมได้
+> ตรวจ ZIP แบบอ่านสมาชิกในหน่วยความจำเมื่อ 2026-10-04 โดยไม่แตกไฟล์หรือคัดลอกเข้า Aether; รายการด้านล่างอ้าง path ภายใน prefix `com.snake/`. รายละเอียด checksum และขอบเขตการตรวจอยู่ใน [`RUNTIME_SNAPSHOT_REVIEW.md`](RUNTIME_SNAPSHOT_REVIEW.md). นี่เป็น snapshot ข้อมูลแอป ไม่ใช่ `docs/snake.zip` ซึ่งเป็น package archive ที่ใช้สกัด `assets/` และ `res/`.
 
-| ไฟล์ | ค่า | การตีความในรายงาน |
+| ไฟล์/ส่วน | สิ่งที่ตรวจยืนยันได้ | ขอบเขตการตีความ |
 |---|---|---|
-| `root/proc/0/cmdline` | `com.miniclip.eightballpool` | ชื่อ process ลูกที่ engine spawn |
-| `root/data/app/com.miniclip.eightballpool/package.conf` | EightBallPoolActivity / EightBallPoolApplication / v56.23.2 (562310023) / พาธจริง `/data/app/~~F1DD…/base.apk` | registry เกมที่ engine mount |
-| `root/data/user/0/com.miniclip.eightballpool/a0rjgdfbjd8fhfglkew6/90d8aa15a2de2cb4/arm64-v8a/` | `libgame-BPM-GooglePlay-Gold-Release-Module-3965.so` (67904 B, **เนื้อหาถูกเข้ารหัส**) + `libbuffer_pgl.so` (86 B) + `libpglarmor.so` (220 B) | ไลบรารีเกมที่ engine ดึงออกมา — **สภาพจริง = ไฟล์หลักฐาน ห้ามแตะ** |
-| `root/system/*.conf` | uid/user/shared-user | virtual environment confs |
-| `shared_prefs/com.snake.xml` | `cip_pub` (ว่าง) | engine pref |
+| `root/proc/0/cmdline` | บันทึกชื่อ `com.miniclip.eightballpool` (26 bytes) | เป็นข้อมูลใน snapshot ไม่ใช่หลักฐานเดี่ยวว่าการเปิด guest Activity สำเร็จ |
+| `root/data/app/com.miniclip.eightballpool/package.conf` | binary metadata 173,904 bytes; มีชื่อ package, `EightBallPoolActivity`, `EightBallPoolApplication`, string `56.23.2` และ reference ไปยัง install path `base.apk` | APK ที่อ้างถึงไม่ใช่ ZIP member; review นี้ไม่ยืนยัน `versionCode` |
+| `root/data/user/0/com.miniclip.eightballpool/` | มี persisted app data, WebView/cache, crash-report และ SDK-state files | ค่าและ identifiers ไม่ได้ถอดหรือคัดลอก; ให้ถือข้อมูลเป็น sensitive |
+| `oat/arm64/Anonymous-DexFile@*.vdex` | มี 5 VDEX files ขนาด 108, 8,748, 156, 300 และ 156 bytes | เป็น VDEX cache records; ไม่ใช่ source DEX/APK และไม่พิสูจน์การ launch |
+| `root/system/*.conf` | พบไฟล์ config ใน snapshot | เก็บไว้เป็น inventory เท่านั้น; ไม่ถอดค่าลงรายงานนี้ |
 
-🔒 **ขอบเขตการแก้ไข:** `comsnake-live/root/data/user/0/com.miniclip.eightballpool/` และ `attachments/uploads/` ถูกอ้างถึงใน external report แต่ไม่ได้เป็นส่วนหนึ่งของ repository นี้; รายงานระบุว่าเป็นข้อมูล runtime/ต้นฉบับที่ควรเก็บโดยไม่แก้ไข ทั้งนี้ไม่สามารถยืนยันสถานะหรือ provenance จากไฟล์ที่เหลืออยู่ใน repository ได้
+Inventory ของ ZIP ไม่มีสมาชิกนามสกุล `.apk`, `.dex` หรือ `.so`. ดังนั้นข้อความในรายงานเก่าที่ระบุ `versionCode=562310023`, พาธ APK จริง หรือไลบรารีเกม `libgame...`/PGL มาจากหลักฐานภายนอกและยังยืนยันจาก `docs/com.snake.zip` นี้ไม่ได้. SHA-256 ของ `package.conf` ใน ZIP นี้คือ `34afdbbe314935324e5cb5aa535e5ea8ef8fae042c82038b0e5279c160d60b6b`; ไม่ตรงกับ prefix `8ce5af64…` ที่รายงานเก่าอ้างให้ `comsnake-live`/`com.snake_1.zip`, จึงห้ามถือว่าเป็น snapshot เดียวกัน.
+
+🔒 **ขอบเขตการแก้ไข:** `docs/com.snake.zip` คงเป็นหลักฐานแยกต่างหาก; ไม่มี member ใดถูกแตกหรือ port เข้า Aether. Snapshot มี app-private data และ SDK state จึงไม่ควรนำ raw values มาแสดงหรือทำสำเนาใน payload.
 
 ---
 
@@ -228,6 +230,8 @@ libZeroGod.so → shadowhook 2.0.1-rc.15 (inline-hook MULTI mode init ok)
 ## 3.6 🆕 การสกัดลงลึก com.snake_1.zip — hidden dex evidence + timeline ใช้งานจริง
 
 สกัดไว้ที่ `workspace/snake1-extract/` (สแนปช็อตเครื่อง Xiaomi POCO F1 / beryllium / Android 13 / th_TH)
+
+หมายเหตุ: `docs/com.snake.zip` มี VDEX 5 รายการที่ชื่อและขนาดตรงกับ inventory ด้านล่าง แต่ `package.conf` hash ไม่ตรงกับ prefix ที่รายงานในส่วนนี้ จึงยืนยันได้เฉพาะว่ามี VDEX เหล่านั้นใน retained ZIP; ไม่ยืนยันว่าเป็น snapshot เดียวกันหรือยืนยัน timeline/database claims ของแหล่งภายนอก
 
 ### สิ่งที่เหมือนเดิม
 - `root/` ตรงกับ comsnake-live **100%** (sha256 package.conf = `8ce5af64…` เดียวกัน) — สแนปช็อต 56.23.2 อ้างอิงเดียวกัน
@@ -289,8 +293,10 @@ hidden dex (in-memory) → MethodUtils (Executable/AccessibleObject deps) → Na
 
 ---
 
-## 6. External file references cited by the original analysis (not included here)
+## 6. Additional file references and provenance
 
+- `docs/com.snake.zip` is the separately retained runtime-data snapshot reviewed in `RUNTIME_SNAPSHOT_REVIEW.md`; it is not the static `docs/snake.zip` package archive and is not byte-identical to the cited `comsnake-live`/`com.snake_1.zip` package metadata.
+- The remaining source paths below are external references cited by the original analysis and are not included in this repository.
 - `snake_apk_extract/jadx_out/sources/com/snake/App.java` — reported Application entry
 - `snake_apk_extract/jadx_out/sources/com/Entry.java` — reported launcher and channel G
 - `snake_apk_extract/jadx_out/sources/com/snake/helper/Native.java` — reported JNI bridge
