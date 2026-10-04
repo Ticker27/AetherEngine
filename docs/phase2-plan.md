@@ -108,7 +108,7 @@ Verified by tracing source, not by assumption:
 | 3 | Stub scheduler + slot booking `P0..P3` (NATIVE_CALLSITE_MAP #9/#10) | pools exist; no scheduler/booking | **M3** — slot scheduler over existing registry |
 | 4 | Guest bind: virtual ActivityThread, `newApplication`, `callActivityOnCreate` (§0-E) | absent | **M3** — `GuestRuntimeAdapter` in proxy Activity |
 | 5 | Guest Context/ClassLoader redirect (`z2`, `a3`) | ClassLoader exists; no Context | **M2** — guest Context/resources facade |
-| 6 | Guest resources/assets resolution | absent (Snake `assets/`+`res/` are opaque data) | **M2** — resource loading (spike-gated) |
+| 6 | Guest resources/assets resolution | absent (Snake `assets/`+`res/` are opaque data) | **M2** — `GuestAssetArchive` + host resources per the Spike A decision ([spec §3.1](guest-container-spec.md)); no guest resource-id mapping |
 | 7 | Guest data dirs install steps (bi/eh/ci) | `GuestVirtualFileSystem` per-APK roots ✅ | reuse; **M1** wires install step |
 | 8 | Multi-process `:p0..:p3` spawned via ContentProvider handshake (#11/#12) | single-process | **Phase 3** (§5) — Phase 2 runs in-process |
 | 9 | Fake AMS/PMS binder servers, identity bundle `p3`, `gcuid` | deliberately absent (docs forbid spoofing) | **Phase 3 decision**, not scheduled |
@@ -138,13 +138,17 @@ ownership, thread rules, the event flow and vocabulary, stable `GUEST_*` error c
 payloads (`guestInstall`/`guestLaunch`/`guestClose`/`guestState` + `guestEvents`). Its §10 tracks
 M0.2–M0.5, whose decisions still have to be written back into it.
 
-**M0.2 Spike A (riskiest unknown): resource & asset access**
+**M0.2 Spike A (riskiest unknown): resource & asset access** (✅ resolved 2026-10-04 — see
+[spec §3.1](guest-container-spec.md#31-spike-a-decision-record--guest-resource--asset-loading-m02-resolved-2026-10-04)
 
-- Options to evaluate on-device: (a) public resource/asset paths for a private APK,
-  (b) `addAssetPath`-style APIs (conflict with the no-hidden-API stance), (c) fallback —
-  host resources with guest assets served through `GuestVirtualFileSystem`.
-- Deliverable: a written decision record in the spec with measured results; the chosen
-  path gates M2.
+- Options evaluated: (a) public resource/asset paths for a private APK, (b) `addAssetPath`-style
+  APIs (conflict with the no-hidden-API stance), (c) fallback — host resources with guest assets
+  served from the verified cached APK.
+- Result: **(c)**, implemented as `GuestAssetArchive` (public `ZipFile` over the APK that
+  `DynamicApkLoader` already verified and made read-only). (a) does not exist in public API;
+  (b) requires three hidden surfaces and still cannot repoint guest `getAssets()` because
+  `AssetManager` is `final`. Decision record, evidence, and accepted consequences are in the spec.
+- Device-based confirmation was not possible in this environment and is tracked as follow-up F1.
 
 **M0.3 Spike B: manifest parsing path**
 
@@ -185,13 +189,16 @@ existing verifiers still pass.
 
 ### M2 — Guest resources & context (M, highest risk)
 
-- `GuestResources` / `GuestContext`: assets, theme, string/drawable lookup, `classLoader`,
-  `packageName`, data dirs backed by `GuestVirtualFileSystem`.
-- Per Spike A decision; if only hidden APIs work, implement the documented fallback and say
-  so plainly in the docs — do not silently regress the no-hidden-API stance.
+- `GuestAssetArchive` / `GuestContext`: archive-backed `assets/**` reads, host `Resources`,
+  `classLoader`, `packageName`, data dirs backed by `GuestVirtualFileSystem`.
+- Per the Spike A decision ([spec §3.1](guest-container-spec.md)): public APIs only, no guest
+  resource-id mapping, no non-SDK resource lane. Consequences stated there (guest `getAssets()`
+  still sees host assets; guest layout/string/theme ids do not resolve) are part of the contract.
 - Security review gate before M3 (resource loading touches file access and class loading).
 
-**Acceptance:** instrumented test loads a guest string + asset + theme attribute; docs
+**Acceptance:** JVM tests read `assets/**` from the fixture APK and reject traversal/absolute
+paths; an instrumented test confirms host resources resolve, guest VFS paths stay inside the guest
+root, and a guest resource id returns `GUEST_RESOURCES_UNSUPPORTED`; docs
 (`architecture.md`, `host-container.md`) updated with the verified resource path.
 
 ### M3 — Guest Application & Activity in proxy slots (L) — the "works like Snake" milestone
@@ -206,6 +213,10 @@ existing verifiers still pass.
 - Everything gated behind `flagger` (`HostFeature.GUEST_CONTAINER`), default **off**.
 - Manual validation protocol for the real target (needs out-of-band APK + signer pin);
   CI uses the fixture guest only.
+- Expected outcome for the pinned target per Spike A ([spec §3.1](guest-container-spec.md)):
+  guest code executes in the slot with guest data dirs and archive-backed asset reads, but its
+  own UI does not render, because the target is a native engine whose content is read by file
+  path and whose resource ids are not mapped. Do not present this as a playable guest.
 
 **Acceptance:** instrumentation test with the fixture guest observes
 `Application.onCreate` + `Activity.onCreate/onResume` through the relay; JVM tests cover
@@ -285,7 +296,7 @@ M6 continuous + final pass
 | --- | --- |
 | Single-process MVP for Phase 2 | ✅ **decided: yes** (2026-10-04) |
 | In-house AXML reader vs `getPackageArchiveInfo` | pending Spike B (M0.3) |
-| Resource/asset API path | pending Spike A (M0.2) |
+| Resource/asset API path | ✅ **decided: (c) fallback** — `GuestAssetArchive` over the verified APK; no hidden APIs, no guest resource-id mapping (M0.2, 2026-10-04) |
 | Fixture guest: prebuilt vs Gradle-built | pending M0.4 |
 
 ### Inputs still missing to make a game/app actually run inside AetherEngine
@@ -324,7 +335,7 @@ flagger toggle + `loadTargetApk` caller (M5) · docs/CI hardening (M6). The fixt
 - [ ] `docs/guest-container-spec.md` exists and matches the implementation
 - [ ] Install-model parses/persists/resolves the pinned target (fixture-verified in CI)
 - [ ] Guest `Application` + `Activity` observed running in a proxy slot (instrumented test)
-- [ ] Guest resources/Context path implemented **or** explicitly documented as fallback
+- [ ] Guest resources/Context path implemented per the Spike A decision **or** explicitly documented as fallback
 - [ ] Service/Receiver/Provider dispatch through existing pools with tests
 - [ ] Flutter install/launch/observe ops + diagnostics screen
 - [ ] `flagger` gates every new capability; defaults unchanged (off)
