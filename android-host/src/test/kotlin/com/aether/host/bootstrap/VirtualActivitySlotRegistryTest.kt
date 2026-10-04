@@ -39,6 +39,7 @@ class VirtualActivitySlotRegistryTest {
 
         registry.record(event(activity, "created", slot = 1, proxyType = "standard-p1"))
         registry.record(event(activity, "created", slot = 1, proxyType = "transparent-p1"))
+        registry.record(event(activity, "destroyed", slot = 1, proxyType = "transparent-p1"))
         registry.record(event(activity, "destroyed", slot = 1, proxyType = "standard-p1"))
         registry.record(event(activity, "created", slot = 1, proxyType = "standard-p1"))
 
