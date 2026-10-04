@@ -1,17 +1,17 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android") version "2.0.21"
+    id("org.jetbrains.kotlin.android")
 }
 
 android {
     namespace = "com.aether.host"
-    compileSdk = 34
-    buildToolsVersion = "35.0.0"
+    compileSdk = 36
+    buildToolsVersion = "36.0.0"
     ndkVersion = "26.3.11579264"
 
     defaultConfig {
         applicationId = "com.aether.host"
-        minSdk = 23
+        minSdk = 24
         targetSdk = 34
         versionCode = 1
         versionName = "0.2.0"
@@ -30,6 +30,12 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -46,16 +52,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     sourceSets {
-        getByName("main") {
-            kotlin.srcDir("src/main/kotlin")
-        }
         getByName("test") {
-            kotlin.srcDir("src/test/kotlin")
+            kotlin.srcDirs("src/test/kotlin")
         }
     }
 
@@ -77,13 +76,17 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
 dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
 
-    // Phase 3: Flutter embedding will be provided by flutter-app build
-    // via `flutter pub get` generating .android/Flutter and adding:
-    // implementation(project(":flutter"))
-    // For Phase 1, keep buildable without Flutter SDK — no flutter_embedding dep.
+    // settings.gradle.kts includes the generated Flutter module after `flutter pub get`.
+    implementation(project(":flutter"))
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.mockito:mockito-core:5.11.0")

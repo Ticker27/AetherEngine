@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - "arena/**"
   pull_request:
     branches:
       - main
@@ -17,135 +18,111 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-
-  # ------------------------------------------------------------
-  # Repository validation — Phase 1 Bootstrap
-  # ------------------------------------------------------------
-
   structure:
-    name: Repository Structure (Phase 1)
+    name: Host Container Structure
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install ripgrep
         run: sudo apt-get update && sudo apt-get install -y ripgrep
 
-      - name: Verify repository structure — Phase 1 Bootstrap
+      - name: Verify source, manifest, and JNI structure
+        run: python3 scripts/verify_host_structure.py
+
+      - name: Verify imported Snake assets and resources
+        run: python3 scripts/verify_snake_payload.py
+
+      - name: Verify JNI bootstrap and runtime source
         shell: bash
         run: |
-          set -e
-          echo "Checking Phase 1 structure..."
-
-          test -d .github/workflows
-          test -d android-host
-          test -d aether-native
-          test -d flutter-app
-          test -d docs
-
-          # Android host
-          test -f android-host/build.gradle.kts
-          test -f android-host/src/main/AndroidManifest.xml
-          test -f android-host/src/main/kotlin/com/aether/host/AetherApplication.kt
-          test -f android-host/src/main/kotlin/com/aether/host/MainActivity.kt
-          test -f android-host/src/main/kotlin/com/aether/host/Native.kt
-          test -f android-host/src/main/kotlin/com/aether/host/AetherFlutterHost.kt
-
-          # Native.kt must have loadLibrary + 4 methods
-          rg -q 'System\.loadLibrary.*aether' android-host/src/main/kotlin/com/aether/host/Native.kt
-          rg -q 'external fun initialize' android-host/src/main/kotlin/com/aether/host/Native.kt
-          rg -q 'external fun shutdown' android-host/src/main/kotlin/com/aether/host/Native.kt
-          rg -q 'external fun getVersion' android-host/src/main/kotlin/com/aether/host/Native.kt
-          rg -q 'external fun runtimeState' android-host/src/main/kotlin/com/aether/host/Native.kt
-
-          # Native layer — 4 parts: jni, bridge, runtime, platform
-          test -f aether-native/src/main/cpp/CMakeLists.txt
-          test -f aether-native/src/main/cpp/jni/jni_onload.cpp
-          test -f aether-native/src/main/cpp/jni/native_registry.cpp
-          test -f aether-native/src/main/cpp/jni/native_registry.h
-          test -f aether-native/src/main/cpp/bridge/engine_bridge.cpp
-          test -f aether-native/src/main/cpp/bridge/engine_bridge.h
-          test -f aether-native/src/main/cpp/bridge/message_bridge.cpp
-          test -f aether-native/src/main/cpp/bridge/message_bridge.h
-          test -f aether-native/src/main/cpp/runtime/runtime_state.cpp
-          test -f aether-native/src/main/cpp/runtime/runtime_state.h
-          test -f aether-native/src/main/cpp/platform/thread_dispatcher.cpp
-          test -f aether-native/src/main/cpp/platform/thread_dispatcher.h
-          test -f aether-native/src/main/cpp/common/logging.h
-          test -f aether-native/src/main/cpp/common/result.h
-
-          # JNI checks
+          set -euo pipefail
+          rg -q 'System\.loadLibrary\("aether"\)' android-host/src/main/kotlin/com/aether/host/bridge/Native.kt
           rg -q 'JNI_OnLoad' aether-native/src/main/cpp/jni/jni_onload.cpp
+          rg -q 'extern "C" JNIEXPORT jint JNICALL JNI_OnLoad' aether-native/src/main/cpp/jni/jni_onload.cpp
           rg -q 'RegisterNativeMethods' aether-native/src/main/cpp/jni/native_registry.cpp
-          rg -q 'runtimeState' aether-native/src/main/cpp/jni/native_registry.cpp
+          rg -q 'com/aether/host/bridge/Native' aether-native/src/main/cpp/jni/native_registry.cpp
           rg -q 'sizeof\(kMethods\)' aether-native/src/main/cpp/jni/native_registry.cpp
 
-          # Runtime state machine
-          rg -q 'RuntimeState' aether-native/src/main/cpp/runtime/runtime_state.h
-          rg -q 'NEW.*INITIALIZED.*RUNNING.*STOPPING.*STOPPED|New.*Initialized.*Running.*Stopping.*Stopped' aether-native/src/main/cpp/runtime/runtime_state.h || rg -q 'enum class RuntimeState' aether-native/src/main/cpp/runtime/runtime_state.h
-
-          # Flutter add-to-app
-          test -f flutter-app/pubspec.yaml
-          test -f flutter-app/lib/main.dart
-          test -f flutter-app/lib/channels/aether_channel.dart
-          test -f flutter-app/lib/services/native_service.dart
-          test -f flutter-app/lib/features/home/home_page.dart
-          rg -q 'MethodChannel.*aether/runtime' flutter-app/lib/channels/aether_channel.dart
-          rg -q 'state' flutter-app/lib/channels/aether_channel.dart
-
-          # Docs
-          test -f docs/architecture.md
-          test -f docs/jni-contract.md
-          test -f docs/lifecycle.md
-
-          # Still forbidden (Phase 1 only)
-          ! test -e aether-runtime || echo "aether-runtime allowed in future phases"
-          ! test -e android-host/src/main/cpp || echo "android-host/src/main/cpp should not exist — use aether-native"
-
-          echo "Repository structure OK (Phase 1 Bootstrap)"
-
-  # ------------------------------------------------------------
-  # Android / Kotlin + Native
-  # ------------------------------------------------------------
-
   android:
-    name: Android Build & Test
+    name: Android Build, Unit Tests & APKs
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
           cache: gradle
 
-      - name: Setup NDK
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.0"
+          cache: true
+
+      - name: Resolve Flutter module dependencies
+        working-directory: flutter-app
+        run: flutter pub get
+
+      - name: Configure Flutter SDK path for Gradle
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'flutter.sdk=%s\n' "$FLUTTER_ROOT" > local.properties
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" >> local.properties
+
+      - name: Set up Android NDK and CMake
         run: |
           SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          "$SDKM" --install "ndk;26.3.11579264" "cmake;3.22.1" >/dev/null
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264" >> $GITHUB_ENV
+          "$SDKM" --install "platforms;android-36" "build-tools;36.0.0" "ndk;26.3.11579264" "cmake;3.22.1" >/dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264" >> "$GITHUB_ENV"
 
       - name: Make Gradle executable
         run: chmod +x ./gradlew
 
-      - name: Build (assembleDebug)
-        run: ./gradlew :android-host:assembleDebug --stacktrace
-
-      - name: Build (assembleRelease)
-        run: ./gradlew :android-host:assembleRelease --stacktrace
-
-      - name: Test (unit)
-        run: ./gradlew :android-host:test --stacktrace
-
-      - name: Native unit test (runtime_state)
+      - name: Assemble debug APK
         shell: bash
         run: |
+          set -o pipefail
+          ./gradlew :android-host:assembleDebug --stacktrace --console=plain 2>&1 | tee /tmp/assemble-debug.log || {
+            tail -n 60 /tmp/assemble-debug.log
+            diagnostics="$(grep -iE '(^e:|error|failed|conflict|manifest merger|aapt|uses-sdk|suggestion|what went wrong|execution failed)' /tmp/assemble-debug.log | tail -n 40 || true)"
+            if [[ -z "$diagnostics" ]]; then diagnostics="$(tail -n 20 /tmp/assemble-debug.log)"; fi
+            summary="$(printf '%s' "$diagnostics" | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g')"
+            echo "::error title=Gradle assembleDebug failed::$summary"
+            exit 1
+          }
+
+      - name: Assemble release APK
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew :android-host:assembleRelease --stacktrace --console=plain 2>&1 | tee /tmp/assemble-release.log || {
+            tail -n 60 /tmp/assemble-release.log
+            diagnostics="$(grep -iE '(^e:|error|failed|conflict|manifest merger|aapt|uses-sdk|suggestion|what went wrong|execution failed)' /tmp/assemble-release.log | tail -n 40 || true)"
+            if [[ -z "$diagnostics" ]]; then diagnostics="$(tail -n 20 /tmp/assemble-release.log)"; fi
+            summary="$(printf '%s' "$diagnostics" | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g')"
+            echo "::error title=Gradle assembleRelease failed::$summary"
+            exit 1
+          }
+
+      - name: Run Android host unit tests
+        run: ./gradlew :android-host:test --stacktrace
+
+      - name: Verify Android, custom-native, Flutter, and Dart binaries
+        run: |
+          python3 scripts/verify_apk_architecture.py android-host/build/outputs/apk/debug/android-host-debug.apk debug
+          python3 scripts/verify_apk_architecture.py android-host/build/outputs/apk/release/android-host-release-unsigned.apk release
+
+      - name: Run native runtime-state tests
+        shell: bash
+        run: |
+          set -euo pipefail
           g++ -std=c++17 -I aether-native/src/main/cpp \
             aether-native/src/main/cpp/runtime/runtime_state.cpp \
             integration-test/native/runtime_state_test.cpp \
@@ -155,55 +132,45 @@ jobs:
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: aether-apks
+          name: aether-host-apks-${{ github.sha }}
           path: |
             android-host/build/outputs/apk/debug/android-host-debug.apk
             android-host/build/outputs/apk/release/android-host-release-unsigned.apk
           if-no-files-found: error
-
-  # ------------------------------------------------------------
-  # Flutter
-  # ------------------------------------------------------------
+          retention-days: 14
 
   flutter:
-    name: Flutter Analyze & Test
+    name: Flutter Analyze & Tests
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Setup Flutter
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: "3.47.0"
           cache: true
 
-      - name: Flutter pub get
+      - name: Resolve Flutter dependencies
         working-directory: flutter-app
         run: flutter pub get
 
-      - name: Flutter analyze
+      - name: Analyze Flutter source
         working-directory: flutter-app
         run: flutter analyze
 
-      - name: Flutter test
+      - name: Run Flutter tests
         working-directory: flutter-app
-        run: flutter test || echo "Flutter tests need flutter_app import path fix — allowed in Phase 1"
-
-  # ------------------------------------------------------------
-  # Final gate
-  # ------------------------------------------------------------
+        run: flutter test
 
   ci-gate:
     name: CI Gate
     runs-on: ubuntu-latest
-
     needs:
       - structure
       - android
       - flutter
-
     steps:
       - name: CI passed
-        run: echo "AetherEngine CI PASSED (Phase 1 Bootstrap — JNI + RuntimeState + Flutter Channel)"
+        run: echo "AetherEngine host-container CI passed; Android APKs were assembled and uploaded."

@@ -1,71 +1,106 @@
 # JNI Contract
 
-## Kotlin Declaration (Native.kt)
+This page records the JNI contract that is implemented in the repository and the safe way to extend it toward the API described in the target architecture. It intentionally does not invent names or signatures for methods that are not in source.
+
+## Current Kotlin declaration
+
+Source: `android-host/src/main/kotlin/com/aether/host/bridge/Native.kt`
 
 ```kotlin
+package com.aether.host.bridge
+
 object Native {
     init { System.loadLibrary("aether") }
-    external fun initialize(): Boolean
-    external fun shutdown()
-    external fun getVersion(): String
-    external fun runtimeState(): String
+
+    @JvmStatic external fun initialize(): Boolean
+    @JvmStatic external fun shutdown()
+    @JvmStatic external fun getVersion(): String
+    @JvmStatic external fun runtimeState(): String
 }
 ```
 
-Class path: `com/aether/host/Native` — must use `/`, not `.`
+This loads `libaether.so` and registers the class path **`com/aether/host/bridge/Native`**. Do not use the reported APK-analysis package `com/aether/helper/Native` in C++ unless that exact Kotlin declaration is added and verified.
 
-## C++ Registration (native_registry.cpp)
+## Current registered methods
 
-Grouped 13 bindings design (currently 4 implemented):
+Source: `aether-native/src/main/cpp/jni/native_registry.cpp`
 
-- Lifecycle: initialize, shutdown, (future: start)
-- Runtime: getVersion, runtimeState, (future: isRunning)
-- Message: 4 methods (future)
-- Diagnostic: 3 methods (future)
+| Kotlin method | JNI descriptor | Native result |
+| --- | --- | --- |
+| `initialize()` | `()Z` | `jboolean` |
+| `shutdown()` | `()V` | `void` |
+| `getVersion()` | `()Ljava/lang/String;` | non-null `String` |
+| `runtimeState()` | `()Ljava/lang/String;` | non-null `String` |
 
-```cpp
-JNINativeMethod kMethods[] = {
-    {"initialize", "()Z", reinterpret_cast<void*>(nativeInitialize)},
-    {"shutdown", "()V", reinterpret_cast<void*>(nativeShutdown)},
-    {"getVersion", "()Ljava/lang/String;", reinterpret_cast<void*>(nativeGetVersion)},
-    {"runtimeState", "()Ljava/lang/String;", reinterpret_cast<void*>(nativeRuntimeState)},
-};
+The current implementation has one `JNINativeMethod` table with four entries and one `RegisterNatives()` call. It does not export per-method `Java_com_...` functions.
+
+## Current load and registration sequence
+
+```text
+System.loadLibrary("aether")
+  → Android loads libaether.so
+  → JNI_OnLoad(JavaVM*, ...)
+  → GetEnv(JNI_VERSION_1_6)
+  → save JavaVM for bridge callbacks
+  → RegisterNativeMethods(env)
+  → FindClass("com/aether/host/bridge/Native")
+  → RegisterNatives(class, kMethods, methodCount)
 ```
 
-## JNI Signatures
+`methodCount` is derived from the table with `sizeof(kMethods) / sizeof(kMethods[0])`. Registration failure makes `JNI_OnLoad()` return `JNI_ERR`, causing library loading to fail. This repository's `JNI_OnLoad()` does **not** decode method names or build a runtime table dynamically; the four current entries are a static C++ table.
 
-- `()Z` -> boolean
-- `()V` -> void
-- `()Ljava/lang/String;` -> String (never null)
-- `(Ljava/lang/String;)V` -> void with String param
-- Future: `(Ljava/lang/String;)Ljava/lang/String;`
+## Target API from the supplied architecture notes
 
-## JNI_OnLoad
+The notes describe a different/expanded APK contract:
+
+| Target class path | Reported native methods | Status in this repository |
+| --- | ---: | --- |
+| `com/aether/helper/Native` | 11 | Not present; current JNI facade is `com/aether/host/bridge/Native` with 4 methods |
+| `com/aether/helper/flagger` | 2 | Not present as a JNI class; `com/aether/host/virtualization/flags/flagger` is a separate pure-Kotlin feature-flag utility |
+| **Total reported** | **13** | Target binary contract only; not implemented here |
+
+The notes also sketch registration groups of 1, 2, and 10 methods. The current source does not contain those groups. The group sizes and their class ownership must be verified against the real DEX/APK; they cannot be inferred from the current Git source. Do not add placeholder methods simply to make the count appear to match.
+
+A separate [Snake Engine reference bundle](reference/snake-engine/README.md) contains reports about `com.snake.helper.Native` and `com.snake.helper.flagger`. The [static extraction log](reference/snake-engine/ARCHIVE_EXTRACTION_LOG.md) records the pre-removal inspection of the `com.snake` 2.2.6 package snapshot and the hash mismatch with older notes. These Snake-specific class paths are not declarations for `com.aether.helper.*`, Aether's host bridge, or 8 Ball Pool. Call-site/runtime reports cite additional inputs not in the archive; do not copy their JNI names or descriptors into this project without direct, target-specific evidence.
+
+## Extension design for multiple classes/tables
+
+Once the exact Kotlin/DEX declarations and descriptors are known, keep one registration table per class or deliberate API group and make each registration failure explicit. A suitable shape is:
 
 ```cpp
-JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void*) {
-    JNIEnv* env = nullptr;
-    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) return JNI_ERR;
-    if (!RegisterNativeMethods(env)) return JNI_ERR;
-    return JNI_VERSION_1_6;
+bool RegisterNativeMethods(JNIEnv* env) {
+    return RegisterClassMethods(env, kNativeClass, kNativeMethods,
+                                CountOf(kNativeMethods)) &&
+           RegisterClassMethods(env, kFlaggerClass, kFlaggerMethods,
+                                CountOf(kFlaggerMethods));
 }
 ```
 
-## Debugging Tips
+`RegisterClassMethods` should validate the environment, call `FindClass()` with the verified slash-separated binary name, check pending exceptions, call `RegisterNatives()`, release the local class reference, and report failure. If analysis confirms multiple independent registration groups for one class, represent those groups explicitly and ensure they do not conflict; otherwise prefer one table per class for simpler validation.
 
-If `RegisterNatives()` fails, check 3 points first:
-1. Class path must use `/`: `com/aether/host/Native`
-2. JNI signature must match Kotlin declaration exactly
-3. Method count must be calculated via `sizeof(kMethods)/sizeof(kMethods[0])`, not hardcoded
+Before implementing the target API:
 
-Common failures:
-- `NoSuchMethodError` -> signature mismatch
-- `UnsatisfiedLinkError` at load -> `JNI_OnLoad` returned `JNI_ERR`
-- `ClassNotFoundException` -> wrong class path
+1. Record every exact class binary name, method name, static/instance form, and JNI descriptor from the DEX/API contract.
+2. Add matching Kotlin declarations and C++ implementations in the same change.
+3. Update `JNI_OnLoad()` registration and native contract tests together.
+4. Verify the final APK's DEX and `libaether.so` exports/registration behavior on each supported ABI.
 
-## Safety
+## JNI descriptor reminders
 
-- Never return nullptr for String methods — return "unknown" or "new" as fallback
-- Guard state machine with mutex — prevent double initialize
-- Use `DeleteLocalRef` after `FindClass`
-- Check `ExceptionCheck()` after `FindClass` and `RegisterNatives`
+- `()Z` → Boolean
+- `()V` → Unit/void
+- `()Ljava/lang/String;` → String
+- `(Ljava/lang/String;)V` → String argument, void result
+- `(Ljava/lang/String;)Ljava/lang/String;` → String argument and result
+
+For `@JvmStatic` declarations, verify the generated JVM method form as well as the Kotlin source signature. JNI descriptors are based on the compiled class, not just the visual Kotlin declaration.
+
+## Safety and diagnostics
+
+- Use slash-separated class paths in `FindClass()`, never dotted package names.
+- Match method names, descriptors, and static/instance calling conventions exactly.
+- Compute table sizes; do not hardcode counts.
+- Never return `nullptr` for non-null Kotlin `String` results; the current methods have fallbacks.
+- Check `ExceptionCheck()` after class lookup and registration. Preserve enough diagnostic information to identify the failed class/table.
+- Delete local references after successful class lookup.
+- Keep JNI callbacks and runtime-state access thread-safe.

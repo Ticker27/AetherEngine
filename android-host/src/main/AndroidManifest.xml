@@ -1,20 +1,108 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:name=".AetherApplication"
+        android:allowBackup="false"
         android:label="AetherEngine"
-        android:hasCode="true">
+        android:hasCode="true"
+        android:usesCleartextTraffic="false">
+
+        <!-- Uses the v2 Flutter embedding packaged from flutter-app/.android. -->
+        <meta-data android:name="flutterEmbedding" android:value="2" />
 
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:exported="true"
+            android:hardwareAccelerated="true"
+            android:theme="@style/Theme.Aether"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/Theme.Aether" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-    </application>
+        <!-- Standard proxy pool: P0..P3 and explicit landscape variants. -->
+        <activity android:name="com.aether.host.virtualization.activity.ProxyActivityP0" android:exported="false" />
+        <activity android:name="com.aether.host.virtualization.activity.ProxyActivityP1" android:exported="false" />
+        <activity android:name="com.aether.host.virtualization.activity.ProxyActivityP2" android:exported="false" />
+        <activity android:name="com.aether.host.virtualization.activity.ProxyActivityP3" android:exported="false" />
+        <activity android:name="com.aether.host.virtualization.activity.ProxyActivityP0_L" android:exported="false" android:screenOrientation="landscape" />
+        <activity android:name="com.aether.host.virtualization.activity.ProxyActivityP1_L" android:exported="false" android:screenOrientation="landscape" />
+        <activity android:name="com.aether.host.virtualization.activity.ProxyActivityP2_L" android:exported="false" android:screenOrientation="landscape" />
+        <activity android:name="com.aether.host.virtualization.activity.ProxyActivityP3_L" android:exported="false" android:screenOrientation="landscape" />
 
+        <!-- Transparent proxies are internal and use a transparent, non-floating theme. -->
+        <activity android:name="com.aether.host.virtualization.activity.TransparentProxyActivityP0" android:exported="false" android:theme="@style/Theme.Aether.Transparent" />
+        <activity android:name="com.aether.host.virtualization.activity.TransparentProxyActivityP1" android:exported="false" android:theme="@style/Theme.Aether.Transparent" />
+        <activity android:name="com.aether.host.virtualization.activity.TransparentProxyActivityP2" android:exported="false" android:theme="@style/Theme.Aether.Transparent" />
+        <activity android:name="com.aether.host.virtualization.activity.TransparentProxyActivityP3" android:exported="false" android:theme="@style/Theme.Aether.Transparent" />
+
+        <!-- PendingIntent proxies are private to this host package. -->
+        <activity android:name="com.aether.host.virtualization.activity.ProxyPendingActivityP0" android:exported="false" android:excludeFromRecents="true" />
+        <activity android:name="com.aether.host.virtualization.activity.ProxyPendingActivityP1" android:exported="false" android:excludeFromRecents="true" />
+        <activity android:name="com.aether.host.virtualization.activity.ProxyPendingActivityP2" android:exported="false" android:excludeFromRecents="true" />
+        <activity android:name="com.aether.host.virtualization.activity.ProxyPendingActivityP3" android:exported="false" android:excludeFromRecents="true" />
+
+        <activity
+            android:name="com.aether.host.virtualization.web.InternalWebBrowser"
+            android:exported="false" />
+
+        <receiver
+            android:name="com.aether.host.virtualization.components.receiver.ProxyBroadcastReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <service android:name="com.aether.host.virtualization.components.service.DaemonService" android:exported="false" />
+        <service android:name="com.aether.host.virtualization.components.service.DaemonInnerService" android:exported="false" />
+
+        <service android:name="com.aether.host.virtualization.components.service.ProxyServiceP0" android:exported="false" />
+        <service android:name="com.aether.host.virtualization.components.service.ProxyServiceP1" android:exported="false" />
+        <service android:name="com.aether.host.virtualization.components.service.ProxyServiceP2" android:exported="false" />
+        <service android:name="com.aether.host.virtualization.components.service.ProxyServiceP3" android:exported="false" />
+
+        <service android:name="com.aether.host.virtualization.components.service.ProxyJobServiceP0" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
+        <service android:name="com.aether.host.virtualization.components.service.ProxyJobServiceP1" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
+        <service android:name="com.aether.host.virtualization.components.service.ProxyJobServiceP2" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
+        <service android:name="com.aether.host.virtualization.components.service.ProxyJobServiceP3" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <!-- System-only binding. The implementation does not start a VPN tunnel by default. -->
+        <service
+            android:name="com.aether.host.virtualization.components.service.ProxyVpnService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
+
+        <provider
+            android:name="com.aether.host.virtualization.components.provider.FileProvider$a"
+            android:authorities="${applicationId}.files.a"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/aether_file_paths" />
+        </provider>
+        <provider
+            android:name="com.aether.host.virtualization.components.provider.FileProvider$b"
+            android:authorities="${applicationId}.files.b"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/aether_file_paths" />
+        </provider>
+
+        <provider android:name="com.aether.host.virtualization.components.provider.ProxyContentProviderP0" android:authorities="${applicationId}.guest.provider.p0" android:exported="false" />
+        <provider android:name="com.aether.host.virtualization.components.provider.ProxyContentProviderP1" android:authorities="${applicationId}.guest.provider.p1" android:exported="false" />
+        <provider android:name="com.aether.host.virtualization.components.provider.ProxyContentProviderP2" android:authorities="${applicationId}.guest.provider.p2" android:exported="false" />
+        <provider android:name="com.aether.host.virtualization.components.provider.ProxyContentProviderP3" android:authorities="${applicationId}.guest.provider.p3" android:exported="false" />
+        <provider android:name="com.aether.host.virtualization.components.provider.SystemCallProvider" android:authorities="${applicationId}.system.internal" android:exported="false" />
+
+    </application>
 </manifest>

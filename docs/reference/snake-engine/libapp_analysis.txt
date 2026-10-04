@@ -1,0 +1,86 @@
+# libapp.so — Deep Analysis (Snake Engine)
+
+> **Provenance:** this legacy analyst report attributes its findings to `libapp.so` SHA-256 `2d3577fbaaacc7cb63e5b04a5a21572eeee1e0d55b223941d6a5496a91a427c8`. The binary is intentionally not retained in this repository, so the analysis cannot be independently revalidated here. It is not Aether runtime code.
+
+แหล่งที่ระบุในบันทึกเดิม: decode/disassemble ไฟล์จริง
+ไฟล์: `libapp.so` · SHA-256 `2d3577fbaaacc7cb63e5b04a5a21572eeee1e0d55b223941d6a5496a91a427c8` · 5,637,024 B
+
+---
+
+## 1. ชนิดไฟล์ (verified)
+- ELF64 · AArch64 · DYN (shared object) · compiler = Dart AOT
+- **Flutter Dart AOT snapshot** (ไม่ใช่ native C/C++ ปกติ)
+- BuildId (GNU note): `63956a450772e13c10d2440539822110`
+- Snapshot feature string:
+  `80a49c7111088100a233b2ae788e1f48 product no-code_comments dwarf_stack_traces_mode dedup_instructions no-tsan no-msan arm64 android compressed-pointers`
+  → release/product build, compressed-pointers, dwarf-only stack traces (ไม่มี symbol ปกติ)
+
+## 2. Dart snapshot blob layout (จาก dynsym — พิสูจน์แล้ว)
+| Blob | vaddr | size | end |
+|---|---|---|---|
+| _kDartVmSnapshotData | 0x200 | 0x3ea0 | 0x40a0 |
+| _kDartIsolateSnapshotData | 0x40c0 | 0x150700 | 0x1547c0 |
+| _kDartVmSnapshotInstructions | 0x160000 | 0x16b10 | 0x176b10 |
+| _kDartIsolateSnapshotInstructions | 0x176b40 | 0x3e58a0 | 0x55c3e0 |
+
+- IsolateSnapshotData magic = `f5f5dcdc` (Dart snapshot magic) @ 0x40c0 ✅ ยืนยัน
+- .text (code ทั้งหมด) = 0x160000–0x55c3e0 (0x3fc3e0)
+
+## 3. Call-graph สถิติ (.text ทั้ง 1,044,728 instructions — decode จริง)
+| ตัวชี้วัด | ค่า |
+|---|---|
+| BL direct call | 85,791 → 9,083 ฟังก์ชันปลายทาง |
+| BLR indirect (virtual/closure) | 10,092 |
+| RET (≈ #ฟังก์ชันขั้นต่ำ) | 18,768 |
+| x27 object-pool LDR | 22,104 slot / 3,307 constant |
+
+จุด call ร้อนที่สุด (disassemble ยืนยัน):
+- `0x554734` (12,191×) = stack-spill/allocation stub (`str x30,[x15,#-8]!; stp ...`)
+- `0x552d4c` (1,934×) = runtime-entry stub: `ldr x30,[x26,#0x1f8]; blr x30` (x26 = Dart Thread reg → runtime helper ผ่าน thread-table offset 0x1f8)
+- `0x553954` = bump allocator + GC-check (`ldp x0,x4,[x26,#0x50]; cmp; b.ls`)
+
+## 4. License / DRM pipeline (Dart method — ยืนยันตำแหน่ง .rodata)
+```
+network (rest.snakeseller.com/api/request/)
+  → parseLicenses        @ 0x2a9f6
+  → decompressLicenses    @ 0x1d5df   (zlib inflate)
+  → utf8DecodeLicenses    @ 0x4e765
+```
+- Compression = **zlib/gzip inflate** — พบ `Filter_CreateZLibInflate` + `gzip` (Dart ZLibCodec/GZipCodec)
+- neighbor ของ `utf8DecodeLicenses` = `gzip`, `Server`, `error`, `skipRemainingHandlers` → decode หลัง decompress
+- neighbor ของ `parseLicenses` = `address`, `ATTLIST` (XML), UI strings หลายภาษา
+
+## 5. Crypto engine = PointyCastle (ยืนยันจาก OID + factory strings)
+Signature/verify ที่ compile เข้ามา:
+- `md5WithRSAEncryption`, `sha1/224/256/384/512WithRSAEncryption`
+- `rsaPSS`, `rsaEncryption` (RSA), `ecPublicKey` (EC), PKCS7 signature (`Signer Infos`, `Digest Algorithm`)
+- Digest: SHA-224/256/384/512, `messageDigest`
+- base64 std alphabet @ 0x41f3f (`ABCD...+/`) — ใช้ decode key/signature
+
+## 6. Endpoints & auth (ยืนยันจาก string)
+- `https://rest.snakeseller.com/api/request/` — API หลัก (Authorization header)
+- `https://www.snakeengine.com/topup/` — billing
+- `getHttpConnectionHookClosure` / `_getWatchSignalInternal` → HTTP hook layer
+- ช่องทางขาย/ซัพพอร์ต: Discord, Telegram (t.me), WhatsApp (wa.me), Facebook
+
+## 7. Business logic (device-locked subscription — จาก string จริง)
+- Access Token ผูก Device ID: *"convert to key will generate a CODE that only works for this device id"*, *"Lock the key... only for this device id"*
+- Subscription state: Activate / Activate For(*) / Get Subscription / renew / **BANNED** / Tier mismatch / *"target device already has an active subscription"*
+- Seller/Reseller tier: Seller ID, Global Seller, Code Sale, Create Key, seller login
+- Multi-language UI: EN / ES / MS / TL(ฟิลิปปินส์) / ID
+
+## 8. เชื่อมกับไฟล์อื่น
+- OAuth `snakeengine.com/oauth/google` + Google client-id อยู่ใน **libengine.so** (native), libapp เป็น UI/logic client
+- license ที่ผ่าน parse→decompress→verify → ส่ง key ให้ native (`libengine.so` → `ElfReader::Load`) ปลด PGL payload
+
+---
+
+## ⚠️ ขอบเขต static ที่ชนเพดาน (ระบุตามหลักฐาน ไม่เดา)
+1. **String xref แบบ ADRP+ADD = 0 / pointer ตรงไปยัง 'parseLicenses' object = 0**
+   → Dart AOT อ้าง String ผ่าน **object-pool (x27-relative LDR)** ไม่ใช่ direct pointer
+   → ตัว **body machine-code ของ parseLicenses ยัง resolve ไม่ถึงบรรทัด** ด้วย static ธรรมดา ต้องใช้ Dart-snapshot parser (blutter) map PP slot ↔ method
+2. **RSA/EC public key หา static ไม่เจอ**: ไม่มี PEM, ไม่มี ASN.1 rsaEncryption/ecPublicKey OID เป็น DER blob, ไม่มี base64 key
+   → public key ที่ verify license **ถูกเก็บเป็น Dart object ใน IsolateSnapshotData** (BigInt modulus/exponent object) ไม่ใช่ DER ต่อเนื่อง → ต้อง parse snapshot object graph ถึงจะดึงได้
+3. ไม่มี AES/SHA/MD5/CRC constant table เป็น block ต่อเนื่อง → PointyCastle สร้าง table ตอน runtime หรือ table ถูก dedup/สลับใน snapshot
+
+

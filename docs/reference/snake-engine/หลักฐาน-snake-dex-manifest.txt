@@ -1,0 +1,327 @@
+# สกัดหลักฐานเชิงลึก: classes_1.dex + AndroidManifest_1.xml (historical Snake Engine 2.1.3 snapshot)
+
+> **⚠️ Historical snapshot:** hashes below do not match the 2.2.6 package payload audited in [`ARCHIVE_EXTRACTION_LOG.md`](ARCHIVE_EXTRACTION_LOG.md). Do not use this note's version/hash metadata for the extracted `assets/` and `res/` payload.
+> **ขอบเขต:** อ้างหลักฐานที่ปรากฏใน 2 ไฟล์นี้เท่านั้น — `classes_1.dex` (3,868,092 B, DEX v039) และ `AndroidManifest_1.xml` (54,228 B, binary AXML → decode ด้วย apktool 2.10.0)
+> **การยืนยันเวอร์ชัน (หลักฐาน: md5):** `classes_1.dex` = `006e396872a920cb16a71cf12a7327a3`, `AndroidManifest_1.xml` = `379ad4c8599ef1c889e079e4b4e4b11c` — ไฟล์ชุดนี้คือชุดอ้างอิง (ไฟล์ชื่อเก่าถูกลบแล้วเพื่อไม่ให้สับสน)
+> **วิธีสกัด:** apktool 2.10.0 (baksmali → 5,445 ไฟล์ smali) + python3 parser (string pool 19,921 สตริง) + grep/sed/find
+> **Package (หลักฐาน Manifest บรรทัด 3):** `package="com.snake"` versionName **2.1.3** compileSdkVersion **35** (Android 15)
+
+---
+
+## 1. ภาพรวมสองไฟล์
+
+| ไฟล์ | ขนาด | ชนิด | เนื้อหาหลัก |
+|---|---|---|---|
+| AndroidManifest_1.xml | 54,228 B | Binary AXML (type 0x0003, magic `03 00 08 00`) | 316 บรรทัดหลัง decode — app "Snake Engine", permissions ~150 รายการ, components 60+ |
+| classes_1.dex | 3,868,092 B | DEX v039 (`dex\n039\x00`) | 5,445 classes, 34,914 methods, 19,921 strings — โค้ด Java ทั้งหมดของแอป |
+
+**สถิติ DEX (หลักฐาน: python parser จาก header):**
+
+```
+magic: dex\n039\0        checksum: 0x50a1f85d
+file_size: 3,868,092     header_size: 112      endian: 0x12345678
+string_ids: 19,921       type_ids: 6,603       proto_ids: 8,763
+field_ids: 13,981        method_ids: 34,914    class_defs: 5,445
+data_size: 3,091,328
+```
+
+---
+
+## 2. AndroidManifest_1.xml — หลักฐานการประกาศตัวตน
+
+### 2.1 แอป (หลักฐานบรรทัด 192–193)
+- `android:label="Snake Engine"`, `android:name="com.snake.App"`, `android:vmSafeMode="true"`, `android:extractNativeLibs="false"`, `android:appComponentFactory="androidx.core.app.CoreComponentFactory"`
+- Launcher: `<activity android:name="com.Entry" android:exported="true">` + intent-filter MAIN/LAUNCHER + meta-data `io.flutter.embedding.android.NormalTheme` + `flutterEmbedding=2` → **UI เป็น Flutter** (สอดคล้องกับ libapp.so/libflutter.so ใน DEX strings)
+
+### 2.2 Permissions — หมวดหมู่ (หลักฐาน: รายการ `<uses-permission>` ทั้งหมดในไฟล์)
+
+| หมวด | ตัวอย่าง permission ที่ปรากฏ |
+|---|---|
+| การติดตั้ง/จัดการแอป | `INSTALL_PACKAGES`, `DELETE_PACKAGES`, `CLEAR_APP_USER_DATA`, `PACKAGE_USAGE_STATS`, `QUERY_ALL_PACKAGES`, `READ_INSTALL_SESSIONS`, `GET_PACKAGE_SIZE` |
+| ระบบ/สิทธิพิเศษ | `READ_LOGS`, `WRITE_SETTINGS`, `SET_TIME`, `SET_TIME_ZONE`, `MANAGE_EXTERNAL_STORAGE`, `FOREGROUND_SERVICE_SPECIAL_USE`, `DETECT_SCREEN_CAPTURE`, `DISABLE_KEYGUARD`, `PERSISTENT_ACTIVITY` |
+| เครือข่าย/VPN | `INTERNET`, `ACCESS_NETWORK_STATE`, `CHANGE_NETWORK_STATE`, `ACCESS_WIFI_STATE`, `CHANGE_WIFI_STATE`, `CHANGE_WIFI_MULTICAST_STATE`, `BIND_VPN_SERVICE` (ผ่าน ProxyVpnService) |
+| ฮาร์ดแวร์/เซนเซอร์ | `CAMERA`, `FLASHLIGHT`, `RECORD_AUDIO`, `ACCESS_FINE/COARSE_LOCATION`, `BODY_SENSORS`, `NFC`, `BLUETOOTH*`, `VIBRATE`, `TRANSMIT_IR`, `USE_FINGERPRINT`, `USE_SIP` |
+| ข้อมูลส่วนตัว/ระบบเก่า | `READ_CONTACTS/WRITE_CONTACTS`, `READ_CALENDAR/WRITE_CALENDAR`, `READ_PHONE_STATE`, `SEND_SMS`, `CALL_PHONE`, `READ/WRITE_CALL_LOG`, `READ/WRITE_PROFILE`, `READ/WRITE_SOCIAL_STREAM`, `READ/WRITE_USER_DICTIONARY`, `AUTHENTICATE_ACCOUNTS`, `USE_CREDENTIALS`, `BATTERY_STATS`, `READ_LOGS` |
+| Badge/launcher (ยี่ห้อจีน/เกาหลี) | `com.samsung.*`, `com.sec.android.*`, `com.huawei.*`, `com.oppo.*`, `com.bbk.*`, `com.miui.*`, `me.everything.badger.*`, `com.sonyericsson/sonymobile.*`, `com.htc.*`, `com.teslacoilsw.*`, `cn.nubia.*` ฯลฯ — **รองรับทุกรอมเพื่อแสดง badge เคาน์เตอร์** |
+| โฆษณา/การเงิน | `com.android.vending.BILLING`, `CHECK_LICENSE`, `com.google.android.gms.permission.AD_ID`, `ACCESS_ADSERVICES_*` |
+| Firebase/GSF | `com.google.android.c2dm.permission.RECEIVE`, `READ_GSERVICES`, `com.google.android.gms.permission.ACTIVITY_RECOGNITION` |
+
+### 2.3 Components ที่ประกาศ (หลักฐาน: แท็กในไฟล์)
+
+**กลุ่ม helper จริง (อยู่กับ host process หรือ process @2131755073):**
+| Component | ชนิด | จุดเด่น |
+|---|---|---|
+| `com.snake.helper.SystemCallProvider` | provider | exported=true, authorities `com.snake.helper.SystemCallProvider` — จุดเข้า "system call" ผ่าน ContentProvider |
+| `com.snake.helper.DaemonService` + `DaemonInnerService` | service | FGS type `dataSync\|specialUse`, property subtype `snake_engine` / `snake_engine_inner` — daemon รักษากระบวนการ |
+| `com.snake.helper.ProxyBroadcastReceiver` | receiver | action `com.snake.stub_receiver` |
+| `com.snake.helper.ProxyVpnService` | service | `android.net.VpnService` + `SUPPORTS_ALWAYS_ON` — จุดต่อ VPN |
+| `com.snake.helper.ProxyActivity` | activity | exported=true |
+| `com.snake.helper.InternalWebBrowser` | activity | WebView ในตัว |
+| `com.snake.helper.FileProvider` / `androidx FileProvider` | provider | authorities `com.snake.helper.FileProvider` / `com.snake.fileprovider` |
+
+**กลุ่ม Proxy P0–P3 (หลักฐาน: ประกาศ process=":p0" ถึง ":p3" ครบชุด):**
+- Activities: `ProxyActivity$P0–P3` (+ `P0_L–P3_L` แนวนอน), `TransparentProxyActivity$P0–P3` (Theme.Translucent), `ProxyPendingActivity$P0–P3`
+- Services: `ProxyService$P0–P3`, `ProxyJobService$P0–P3` (BIND_JOB_SERVICE)
+- Providers: `ProxyContentProvider$P0–P3` — authorities `com.snake.proxy_content_provider_0..3`
+→ **โครงสร้าง 4 process ย่อย (`:p0`–`:p3`) + 4 รูปแบบ component ต่อ process** — ตรงกับสตริงใน DEX: `%s.helper.ProxyActivity$P%d%s`, `%s.helper.ProxyService$P%d`, `%s.helper.ProxyJobService$P%d`, `%s.proxy_content_provider_%d` (สร้างชื่อ class/authority แบบ dynamic)
+
+**กลุ่ม Firebase/Google (มาตรฐาน):** FirebaseInstanceIdReceiver, FirebaseMessagingService, ComponentDiscoveryService, FirebaseInitProvider, AppMeasurementReceiver/Service/JobService, GoogleApiActivity, datatransport services, ProfileInstallReceiver, InitializationProvider
+
+---
+
+## 3. classes_1.dex — โครงสร้าง 5,445 classes (หลักฐาน: baksmali + นับไฟล์)
+
+### 3.1 สัดส่วน package (นับจากไฟล์ smali จริง)
+
+| Package | จำนวนไฟล์ | หมายเหตุ |
+|---|---|---|
+| `androidx/appcompat` **รวม `view/menu`** | **4,636** (ในนั้น `view/menu` = **4,582**) | **จุดอำพรางหลัก** — โค้ดเอนจินแอบอยู่ในเนมสเปซนี้ |
+| `com/google` | 230 | Firebase/analytics/ads |
+| `androidx/recyclerview` | 107 | UI |
+| `io/flutter` | 81 | Flutter engine binding |
+| `android/content` + `android/app` + `android/os` ฯลฯ | ~150 | Stub/shim ของ Android framework |
+| **`com/snake`** | **48** | ตัวจริงที่ประกาศใน Manifest (proxy + helper) |
+| อื่น ๆ (androidx life cycle ฯลฯ) | ~190 | ไลบรารีมาตรฐาน |
+
+**ข้อสังเกตหลักฐาน:** `androidx/appcompat/view/menu` ปกติมี class จริงเพียง ~20 ตัว (ActionMenuItemView, ListMenuItemView, ExpandedMenuView...) แต่ที่นี่มี **4,582 ไฟล์** — ในนั้น **3,225 ไฟล์เป็นชื่อออบฟัสเคต** (a00, a01, ..., xu0, iv0, pv0, d20, kv0, gh...) → **โค้ดเอนจินทั้งหมดถูกยัดในเนมสเปซ "appcompat menu" เพื่อกลบเกลื่อน**
+
+### 3.2 จุดเริ่มต้น: App.smali — โหลด libengine.so (หลักฐานตรง)
+
+```smali
+# com/snake/App.smali <clinit>
+new-instance v0, Ljava/lang/String;
+const/4 v1, 0x6
+new-array v1, v1, [B
+fill-array-data v1, :array_0      # 0x65 0x6e 0x67 0x69 0x6e 0x65
+invoke-direct {v0, v1}, Ljava/lang/String;-><init>([B)V
+invoke-static {v0}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V
+```
+→ byte array `65 6e 67 69 6e 65` = **"engine"** → `System.loadLibrary("engine")` = **libengine.so** — **ชื่อไลบรารีถูกซ่อนเป็น byte array ไม่ใช่ plain string** (สอดคล้องกับสไตล์ออบฟัสเคตเดียวกับที่เห็นใน JNI_OnLoad ของ Ghidra รอบก่อน)
+
+`attachBaseContext`: เรียก `androidx/appcompat/view/menu/ai;->a(Application)` + ได้ singleton `xu0` (`.method public static f()`) แล้ว `xu0.d(Context, App$a)` → **จุดเริ่มต้นเอนจิน = คลาส `xu0` ในเนมสเปซปลอม**
+
+### 3.3 com.snake.helper.Native — สะพาน JNI (หลักฐาน: Native.smali ทั้งไฟล์)
+
+**native methods (ประกาศ `@Keep`):**
+| Method | ลายเซ็นต์ | นัยจากการเรียกใช้ |
+|---|---|---|
+| `ic` | `(Landroid/content/Context;)V` | init เอนจินด้วย Context — ถูกเรียกจาก `xu0.d()` (2 จุด: state n / state o) |
+| `i` | `(I)V` | รับ `SDK_INT` — ถูกเรียกจาก `iv0` (core engine) |
+| `ilil` | `(Ljava/lang/String;)Ljava/lang/String;` | แปลงสตริง (decrypt/encode) |
+| `chl` | `([B)Z` | ตรวจ byte array |
+| `djp` | `(I)[B` | สร้าง byte array จาก int |
+| `awl` | `(Ljava/lang/String;)V` | รับสตริง |
+| `aior` | `(Ljava/lang/String;Ljava/lang/String;)V` | รับ 2 สตริง |
+| `ac` | `(Ljava/lang/Object;Ljava/lang/Object;)V` | **hook method** — ถูกเรียกจาก `c8.smali` หลัง `getDeclaredMethod(...)` → ส่ง Method object เข้า native เพื่อ hook |
+| `update` | `(Ljava/lang/Object;Ljava/lang/reflect/Method;)V` | อัปเดต Method (คล้าย ac) |
+| `pjowqpxe` | `(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V` | ชื่อออบฟัสเคต |
+
+**non-native helpers ใน Native.smali (หลักฐาน):**
+- `gcuid(I)I` — แปลง uid: ถ้า 0x2710–0x4e1f (10000–19999) คืนค่าเดิม; else ผ่าน `xu0.n()`, `pv0.r(pid)`, `iv0.K2()` → **ช่วง 10000–19999 = virtual uid** (ตรงกับระบบ virtual uid ในเอนจิน)
+- `getApplicationInfo(Context, String)` — ดึง appInfo ของ package เป้าหมาย
+- `il(File)` / `il(String)` → ส่งต่อ `d20.g()/h()` = **path translation (sandbox redirect)**
+
+### 3.4 flagger.smali
+```smali
+.class public final Lcom/snake/helper/flagger;
+.method public static native na()V
+.method public static native nb()V
+```
+native flags สองตัว (เปิด/ปิด) — ไม่มีโค้ด Java
+
+---
+
+## 4. คลาสเอนจินหลักในเนมสเปซอำพราง (หลักฐาน: ไฟล์ smali ใน androidx/appcompat/view/menu/)
+
+### 4.1 xu0 — ตัวจัดการเอนจิน (singleton, super = xb)
+```smali
+.class public Landroidx/appcompat/view/menu/xu0;
+.super Landroidx/appcompat/view/menu/xb;
+.field public static final h:Landroidx/appcompat/view/menu/xu0;   # singleton
+.field public static i:Landroid/content/Context;                  # context เก็บไว้
+.field public b:Ljava/util/Map;  .field public d:Ljava/util/List;
+.field public e:Landroid/os/Handler;
+```
+**methods (หลักฐาน: grep .method):** `f()` singleton, `k()` คืน Context, `m()/q(Context)` คืน String (package/ชื่อ), `n()/o()` คืน int, `p()` คืน PackageManager, `s()` คืน `pv0`, `r(String)` คืน IBinder, `D(Intent,I)`, `v(String,I)` คืน o50, `d(Context,xb)` = **จุดตั้งต้น (ถูก App.attachBaseContext เรียก)**, `c(File,I)Z`, `y(String,I)Z`, `A(String,I)Z`, `l()` Handler, `g()` List
+
+→ **xu0 = ตัวกลาง (facade) ของเอนจินทั้งหมด**: เก็บ Context, แจกจ่าย subsystem (cv0/lv0/qv0/pv0), เปิดทางให้ native (เรียก Native.ic)
+
+### 4.2 iv0 — core engine (super = l00$a)
+```smali
+.class public Landroidx/appcompat/view/menu/iv0;
+.super Landroidx/appcompat/view/menu/l00$a;
+.field public m:Landroid/app/Application;
+.field public n:Landroidx/appcompat/view/menu/q3;
+.field public o:Ljava/util/List;   .field public p:Landroid/os/Handler;
+```
+**methods สำคัญ (หลักฐาน: grep .method เต็ม):**
+- `B2()` singleton, `H2()` คืน Application, `N2()` คืน int (userId), `K2()` คืน int (virtual uid), `F2()/I2()/J2()` คืน int, `E2()/G2()` คืน String (package/processName)
+- `C2(IBinder)` คืน Activity, `z2(ApplicationInfo)` คืน Context — **สร้าง Context ปลอมจาก appInfo**
+- `O2(String,String)` — **process init** (รับ package + processName) — ตรงกับเส้นทาง init ที่วิเคราะห์ใน Ghidra รอบก่อน
+- `Q2(Object,Context,ProviderInfo,Object)` — **install provider**; `R2(Context,String,List)` — **installAllProviders**
+- `A2(ServiceInfo,IBinder)` คืน Service, `y2(ServiceInfo)` คืน JobService — **สร้าง Service/JobService ปลอม**
+- `Z2/Y2/a3(String,String,...)` — รับ package+process+context; `x2(String,String)`, `W1(String)`, `n2(Intent)`, `O1(Intent)` คืน IBinder
+- `e2(IBinder)/t(IBinder,Intent)/s0()` คืน IBinder — จัดการ binder
+
+→ **iv0 = ตัวจำลอง Activity/Service/Provider + ตัว init กระบวนการ** (รับ appInfo/processName สร้าง component ปลอม)
+
+### 4.3 pv0 — ตัวจำลอง PackageManager (super = jv0)
+```smali
+.class public Landroidx/appcompat/view/menu/pv0;
+.super Landroidx/appcompat/view/menu/jv0;
+.field public static final d:Landroidx/appcompat/view/menu/pv0;
+```
+**methods (หลักฐาน):** `g()` singleton, `d()` คืน String (package ชื่อจริง?), `r(I)I` **แปลง pid→uid**, `h(ComponentName,II)` คืน ActivityInfo, `i(String,II)` คืน ApplicationInfo, `m(String,II)` คืน PackageInfo, `o/p/q(ComponentName,II)` คืน ProviderInfo/ActivityInfo/ServiceInfo, `A(Intent,ILjava/lang/String;I)` คืน ResolveInfo, `l(String,I)` คืน Intent, `u/v/w(...)` คืน List, `n(I)[String`, `t(String,I)Z`, `s(String,n50,I)` คืน o50, `f(Throwable)`
+
+→ **pv0 = PackageManager จำลอง** — ตอบคำถามเกี่ยวกับ package/component ทั้งหมดโดยไม่พึ่ง system จริง (จุดที่ Aether สร้าง fake PM)
+
+### 4.4 d20 — path redirect (sandbox)
+```smali
+.class public Landroidx/appcompat/view/menu/d20;
+.super Ljava/lang/Object;
+.field public final a:Ljava/util/Map;
+```
+**methods (หลักฐาน):** `d()` singleton, `g(File)` คืน File, `h(String)` คืน String, `c(Context)`, `a(String)`, `b(String,String)`, `e(Map)`, `f(Map)`
+
+→ รับ path จริง → คืน path ใน sandbox (ถูก Native.il เรียก) — ตรงกับกลไก path redirect
+
+### 4.5 kv0 — paths/config ของ sandbox (หลักฐาน: const-string ใน kv0.smali)
+
+```
+"root"                    "data/app/"
+"data/user/%d/%s"         "data/user_de/%d/%s"      "data/user/%d"
+"Android/data/%s"         "databases"
+"uid.conf"  "package.conf"  "shared-user.conf"  "user.conf"
+"accounts.conf"  "fake-location.conf"
+```
+methods: `a()..w()` คืน `java.io.File` หลายตำแหน่ง (root, dataDir, libDir, config files...) + `x()` เขียน/ล้าง config
+
+→ **โครงสร้าง sandbox ครบชุด: uid.conf/package.conf/shared-user.conf/user.conf/accounts.conf/fake-location.conf** — หลักฐานตรงกับชื่อไฟล์ที่เคยเจอในงานวิเคราะห์เอนจิน (lv0 ใน Ghidra)
+
+### 4.6 gh — ClassLoader ปลอม (หลักฐาน)
+```smali
+.class public Landroidx/appcompat/view/menu/gh;
+.super Ldalvik/system/PathClassLoader;
+.method public loadClass(Ljava/lang/String;)Ljava/lang/Class;   # override
+.method public static a()Ljava/lang/String;
+```
+→ **PathClassLoader ที่ override loadClass** — จุดโหลดคลาสเกม (และ intercept คลาส)
+
+### 4.7 c8 — ตัว hook method (หลักฐาน: บริบทเรียก Native.ac)
+```smali
+invoke-virtual {v1,v2,v3}, Ljava/lang/Class;->getDeclaredMethod(...)  # หา Method
+invoke-static {p1,v0}, Lcom/snake/helper/Native;->ac(Ljava/lang/Object;Ljava/lang/Object;)V
+invoke-static {p1}, Landroidx/appcompat/view/menu/vq;->g(Landroid/app/Activity;)V
+```
+→ `getDeclaredMethod` → ส่ง Method เข้า native (`Native.ac`) → ตามด้วย `vq.g(Activity)` = **hook method ของ Activity/คลาสเป้าหมาย**
+
+---
+
+## 5. Binder proxy — 26 อินเทอร์เฟซที่ถูกจำลอง (หลักฐาน: string pool, grep `Stub$Proxy`)
+
+DEX มีชื่อ AIDL `$Stub$Proxy` **26 อินเทอร์เฟซ** (นับจาก `dex_strings.txt`):
+
+| หมวด | อินเทอร์เฟซ |
+|---|---|
+| บัญชี/ระบบ | `IAccountAuthenticator`, `IAccountAuthenticatorResponse`, `IAccountManagerResponse`, `IServiceConnection`, `IStopUserCallback`, `IWallpaperManagerCallback` |
+| Job/App | `IJobCallback`, `IJobService` |
+| Intent/Sync | `IIntentReceiver`, `ISyncAdapter`, `ISyncContext`, `ISyncStatusObserver`, `IContentObserver` |
+| Package | `IPackageDataObserver`, `IPackageDeleteObserver2`, `IPackageInstallObserver`, `IPackageInstallObserver2`, `IPackageInstallerCallback`, `IPackageInstallerSession` |
+| เครือข่าย/ฮาร์ดแวร์ | `IConnectivityManager`, `IWifiScanner`, `ILocationListener`, `ISystemUpdateManager` |
+| Support v4 | `INotificationSideChannel`, `IResultReceiver`, `IResultReceiver2` |
+
+→ **หลักฐานชัดว่าเอนจิน intercept/จำลอง Binder ของ system service หลายตัว** (package manager, job service, connectivity, accounts, sync...) — สอดคล้องกับชั้น ServiceBinderProxy ที่เคยเห็นในงานวิเคราะห์
+
+## 6. string pool — หลักฐานความสามารถอื่น ๆ (หลักฐาน: dex_strings.txt 19,921 สตริง)
+
+### 6.1 เกมเป้าหมาย / SDK อ้างอิง
+- `com.miniclip.madsandroidsdk.config.MAdsContentProvider`
+- `com.miniclip.madsandroidsdk.utils.MAdsContentProvider`
+→ อ้างอิง Miniclip Ad SDK (MAds) — ตัวชี้ว่าแอปนี้สร้างมาเพื่อเกมของ Miniclip (8 Ball Pool) — **ระวัง: หลักฐานในไฟล์คือการอ้างชื่อ provider ของ SDK นี้เท่านั้น ไม่มีชื่อเกมเต็มใน DEX**
+
+### 6.2 เส้นทาง su / root (หลักฐาน)
+```
+/data/local/bin/su        /data/local/bin/su-fake
+/data/local/su            /data/local/su-fake
+/data/local/xbin/su       /data/local/xbin/su-fake
+```
+→ มีการอ้าง path ของ su (จริง/ปลอม) — เกี่ยวข้องกับกลไกสิทธิ์/root บนเครื่อง
+
+### 6.3 ชื่อกระบวนการ/แชนเนล (หลักฐาน)
+```
+"Channel for Snake Engine Daemon"     "com.snake.snake_engine"
+"com.snake.snake_engine.inner"        ".SnakeEngine_Core"
+"@snake_engine-"  "@snake_engine-group-"
+"DaemonInnerService"
+```
+→ แชนเนล notification + ชื่อ service ของ daemon — ตรงกับ DaemonService ใน Manifest
+
+### 6.4 สตริงสร้าง component dynamic (หลักฐาน — ตรงกับ Manifest 2.3)
+```
+%s.helper.ProxyActivity$P%d%s      %s.helper.ProxyService$P%d
+%s.helper.ProxyJobService$P%d      %s.helper.TransparentProxyActivity$P%d
+%s.proxy_content_provider_%d
+```
+→ ชื่อ component ถูกสร้างด้วย format string ตาม process index (P0–P3) — ยืนยันว่า Proxy ทั้งหมดเป็น template ที่ reuse
+
+### 6.5 อื่น ๆ ที่น่าสนใจ (หลักฐาน)
+- `libapp.so`, `libflutter.so`, `FlutterJNI.loadLibrary called more than once` → ยืนยัน Flutter
+- `DexClassLoader`/`PathClassLoader` (ใช้ใน gh.smali) → โหลด DEX เพิ่ม
+- `/data/data/%s`, `/data/data/%s/lib` — path app ปกติ (เปรียบเทียบกับ sandbox ใน kv0)
+- `package.conf`, `uid.conf` ฯลฯ ปรากฏใน kv0 (หัวข้อ 4.5)
+
+## 7. ตารางความสอดคล้องภายใน 2 ไฟล์นี้ (Manifest ↔ DEX)
+
+| # | ข้อสรุป | หลักฐาน Manifest | หลักฐาน DEX |
+|---|--------|------------------|-------------|
+| 1 | app ชื่อ Snake Engine, package com.snake | `android:label="Snake Engine"`, `package="com.snake"` | คลาส `com/snake/*`, `com.snake.snake_engine` strings |
+| 2 | เป็น Flutter app | `com.Entry` + `flutterEmbedding=2` + NormalTheme | `io/flutter` 81 คลาส, `libapp.so`/`libflutter.so` strings |
+| 3 | โหลด libengine.so | `extractNativeLibs="false"` (lib ใน APK) | `App.<clinit>` loadLibrary("engine" จาก byte array) + `Native.smali` native methods |
+| 4 | มี Proxy components 4 process | `ProxyActivity$P0–P3` ฯลฯ process=":p0–:p3" | format strings `%s.helper.ProxyActivity$P%d%s` |
+| 5 | มี daemon + notification | `DaemonService` + `DaemonInnerService` + FGS subtype | `Channel for Snake Engine Daemon`, `com.snake.snake_engine` |
+| 6 | มี VPN | `ProxyVpnService` (BIND_VPN_SERVICE, always-on) | — (class ใน DEX `com/snake/helper/ProxyVpnService.smali`) |
+| 7 | มี sandbox config | — | kv0: uid.conf/package.conf/shared-user.conf/user.conf/accounts.conf/fake-location.conf |
+| 8 | สร้าง Component ปลอม (PM/AM) | components 60+ ประกาศครบ | pv0 (PackageManager จำลอง), iv0 (Activity/Service/Provider จำลอง) |
+| 9 | เรียก native init ตาม SDK_INT | — | iv0 เรียก `Native.i(SDK_INT)`, xu0 เรียก `Native.ic(Context)` |
+| 10 | hook method ผ่าน reflection | — | c8: `getDeclaredMethod` → `Native.ac(Object, Method)` |
+
+---
+## 8. บทสรุป (ตามหลักฐานใน 2 ไฟล์นี้เท่านั้น)
+
+### 8.1 สถาปัตยกรรมที่หลักฐานชี้
+1. **แอป "Snake Engine" (com.snake 2.1.3, target Android 15)** — UI เป็น Flutter (`com.Entry` + libapp.so/libflutter.so) มี permission กว้างขวางผิดปกติ (~150 รายการ ครอบคลุมแทบทุกอย่างที่ Android มี)
+2. **native core = libengine.so** — โหลดตอน `<clinit>` ของ App ด้วยชื่อที่ซ่อนเป็น byte array ("engine") และมีคลาส `Native` เป็นสะพาน JNI (ic/i/ilil/chl/djp/ac/update/pjowqpxe/... ทั้งหมด `@Keep`)
+3. **โค้ดเอนจิน Java ถูกอำพรางในเนมสเปซ `androidx/appcompat/view/menu/`** — 4,582 ไฟล์ (3,225 ชื่อออบฟัสเคต) เทียบกับ appcompat จริง ~20 — คลาสหลัก: `xu0` (facade), `iv0` (core: init process/component ปลอม), `pv0` (PackageManager จำลอง), `d20` (path redirect), `kv0` (sandbox config), `gh` (PathClassLoader override)
+4. **Sandbox จำลอง** — kv0 จัดการไฟล์ `uid.conf`, `package.conf`, `shared-user.conf`, `user.conf`, `accounts.conf`, `fake-location.conf` + path โครงสร้าง `data/user/%d/%s`, `data/user_de/%d/%s` + virtual uid ช่วง 10000–19999 (`gcuid` ใน Native.smali)
+5. **กลไก Proxy 4 กระบวนการ** — components `$P0–$P3` ใน process `:p0–:p3` (Activity/Service/Provider/JobService) + ชื่อ dynamic จาก format strings
+6. **Binder จำลอง 26 อินเทอร์เฟซ** — ชื่อ `$Stub$Proxy` ครบชุด (package/job/connectivity/accounts/sync/...)
+7. **บริการเสริม** — DaemonService (รักษากระบวนการ, FGS specialUse), ProxyVpnService (VPN always-on), InternalWebBrowser, Firebase (analytics/FCM), badge ทุกรอม
+### 8.2 จุดที่สอดคล้องกับงานวิเคราะห์ libengine.so (ชุด ghidra-analysis-results.zip รอบก่อน)
+> หลักฐานไขว้จากชุดก่อน (ไม่อยู่ใน 2 ไฟล์นี้) — ระบุไว้เพื่อความต่อเนื่องเท่านั้น:
+- libengine.so มี `JNI_OnLoad` ออบฟัสเคต + init_array 44 ตัว ↔ DEX นี้โหลด libengine.so และเรียก native `ic/i` จาก xu0/iv0
+- libengine.so import `process_vm_readv`, `dlsym` ↔ DEX มี `Native.ac(Object, Method)` hook ผ่าน `getDeclaredMethod` (c8) และ `MethodUtils` (getDesc/getMethodName)
+- libengine.so มีสตริง `loadClass`, `(Ljava/lang/String;)Ljava/lang/Class;` ↔ DEX มี `gh.loadClass(String)` override
+
+### 8.3 ข้อจำกัดของชุดหลักฐานนี้
+- **ไม่มีโค้ด native ใน 2 ไฟล์นี้** — พฤติกรรมจริงของ `Native.*` ต้องวิเคราะห์จาก libengine.so (ชุด ghidra แยก)
+- ชื่อคลาสใน `androidx/appcompat/view/menu/` ถูกออบฟัสเคต (a00, xu0, iv0...) — การจับคู่ "คลาสนี้ = subsystem นี้" อ้างจาก method signatures ที่เห็นใน smali เท่านั้น
+- Manifest ถูก decode ผ่าน apktool — ค่า resource (`@2131755073` = process name, `@2131820834` = theme) ไม่สามารถถอดเป็นชื่อจริงได้因为没有 resources.arsc ในชุดนี้
+- ไม่มีหลักฐานในไฟล์นี้ว่าเกมเป้าหมายคืออะไร — มีเพียงการอ้าง `com.miniclip.madsandroidsdk.*` (SDK โฆษณาของ Miniclip) ใน string pool
+- ไม่มีการยืนยันว่าโค้ดทั้งหมดถูกใช้จริง — บางส่วนอาจเป็น dead code จากไลบรารี
+
+---
+
+### ภาคผนวก A: รายชื่อไฟล์ smali com.snake ทั้งหมด (48 ไฟล์ — หลักฐาน: find)
+```
+com/Entry.smali, com/snake/App.smali, com/snake/App$a.smali
+com/snake/helper/: DaemonService(+DaemonInnerService), FileProvider(+a,+b), InternalWebBrowser,
+  MethodUtils, Native, ProxyActivity(+P0..P3,+P0_L..P3_L), ProxyBroadcastReceiver,
+  ProxyContentProvider(+P0..P3), ProxyJobService(+P0..P3), ProxyPendingActivity(+P0..P3),
+  ProxyService(+P0..P3), ProxyVpnService, SystemCallProvider, TransparentProxyActivity(+P0..P3),
+  flagger
+```
+
+### ภาคผนวก B: สถิติการสกัด (หลักฐาน: คำสั่งที่ใช้)
+- apktool 2.10.0: `apktool d fake.apk` → 5,445 smali (31.2 MB), Manifest decode 316 บรรทัด
+- python3: DEX header + string pool 19,921 สตริง → `dex_strings.txt`
+- grep/sed/find: นับ package, รายชื่อ method, caller ของ native, const-string ใน kv0

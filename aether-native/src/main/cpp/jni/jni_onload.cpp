@@ -3,7 +3,7 @@
 #include "../common/logging.h"
 #include "../bridge/engine_bridge.h"
 
-JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* /*reserved*/) {
+extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* /*reserved*/) {
     AETHER_LOGI("JNI_OnLoad — AetherEngine loading");
 
     if (!vm) {
@@ -36,7 +36,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* /*reserved*/) {
     return JNI_VERSION_1_6;
 }
 
-JNIEXPORT void JNI_OnUnload(JavaVM* vm, void* /*reserved*/) {
+extern "C" JNIEXPORT void JNICALL JNI_OnUnload(JavaVM* vm, void* /*reserved*/) {
     AETHER_LOGI("JNI_OnUnload — AetherEngine unloading");
     // Cleanup is handled by runtime shutdown — no forced detach here
     (void)vm;

@@ -1,81 +1,113 @@
 # AetherEngine
 
-In-Process Virtualization Engine — Paradigm shift from "observe from outside" to "control from inside".
+A regular Android host application that embeds the Aether Flutter/Dart application beside a separate custom native subsystem and an in-process virtualization-container foundation.
 
-Current stage: **Phase 1 Bootstrap — Android → System.loadLibrary("aether") → JNI_OnLoad → RegisterNatives**
+> **What works now:** `MainActivity` is a real `FlutterActivity`; the Android host builds and packages Aether's `libaether.so`, Flutter's `libflutter.so`, Flutter assets, and (in release) Dart AOT `libapp.so`. The APK installs and runs through Android's normal app model; root is not required.
+>
+> **Important limit:** `DynamicApkLoader` only verifies and loads DEX code. It is not a sandbox and does not run an arbitrary APK's Android components automatically. Guest code shares the host UID and permissions. See [The Host container design](docs/host-container.md).
+>
+> **Selected guest target:** only 8 Ball Pool `com.miniclip.eightballpool` version `56.30.0` (version code `4028`) is accepted by the trust policy. The exact game APK has not been inspected, and the current loader does not launch it. Snake Engine is a separate Android guest-container host; only its `assets/` and compiled `res/` folders are carried as opaque package data, not as its runtime or as evidence for the target. See [target APK](docs/target-apk.md) and the [Snake extraction log](docs/reference/snake-engine/ARCHIVE_EXTRACTION_LOG.md).
 
-## Structure (Phase 1)
+## Runtime architecture
 
-```
-aether-engine/
-├── android-host/          # Android host (Kotlin)
-│   ├── AetherApplication.kt
-│   ├── MainActivity.kt
-│   ├── AetherFlutterHost.kt (Flutter add-to-app, MethodChannel "aether/runtime")
-│   └── Native.kt (System.loadLibrary + 4 externals)
-│
-├── aether-native/         # Native subsystem (libaether.so)
-│   ├── CMakeLists.txt
-│   └── src/main/cpp/
-│       ├── jni/ (jni_onload.cpp, native_registry.cpp)
-│       ├── bridge/ (engine_bridge, message_bridge)
-│       ├── runtime/ (runtime_state: NEW->INITIALIZED->RUNNING->STOPPING->STOPPED)
-│       ├── platform/ (thread_dispatcher)
-│       └── common/ (logging.h, result.h)
-│
-├── flutter-app/           # Flutter add-to-app module
-│   ├── lib/channels/aether_channel.dart (MethodChannel)
-│   ├── lib/services/native_service.dart
-│   └── lib/features/home/home_page.dart
-│
-├── integration-test/
-│   ├── android/ (NativeContractTest)
-│   ├── flutter/ (aether_channel_test)
-│   └── native/ (runtime_state_test)
-│
-└── docs/
-    ├── architecture.md
-    ├── jni-contract.md
-    └── lifecycle.md
+```text
+                          Android
+                             │
+              AndroidManifest.xml + classes.dex
+                 ┌───────────┴────────────┐
+                 │                        │
+                 ▼                        ▼
+       Custom Native JNI lane        FlutterJNI lane
+ com.aether.host.bridge.Native       FlutterActivity/Engine
+   System.loadLibrary("aether")             │
+                 │                   libflutter.so
+                 ▼                        │
+          libaether.so                     ▼
+       JNI_OnLoad/RegisterNatives     Flutter runtime/Dart VM
+                                           │
+                                      libapp.so (release)
+                                           │
+                                           ▼
+                                     Dart application
+
+Dart ↔ MethodChannel("aether/runtime") ↔ AetherRuntimeChannel (Kotlin)
+                                          ↔ custom Native facade/libaether.so
 ```
 
-## Build
+The custom Aether JNI bridge and Flutter's `FlutterJNI` are separate paths. Dart platform messages pass through Flutter's engine to Kotlin; Dart does not call Aether's JNI methods directly. See [runtime architecture](docs/architecture.md).
+
+## Main source areas
+
+```text
+android-host/src/main/kotlin/com/aether/host/
+├── AetherApplication.kt                 # Android process owner
+├── MainActivity.kt                      # FlutterActivity entry point
+├── bridge/
+│   ├── Native.kt                         # custom libaether.so facade (4 known methods)
+│   └── AetherRuntimeChannel.kt            # Flutter platform-message handler
+├── bootstrap/                            # HostInitializer + P0..P3 lifecycle registry
+├── target/TargetApkContract.kt            # pinned external guest release identity
+└── virtualization/
+    ├── filesystem/                        # app-private guest VFS facade (explicit callers only)
+    ├── loader/                            # APK verification + guest-first ClassLoader proxy
+    ├── activity/                          # VirtualActivity and proxy Activity pools
+    ├── components/                        # service/provider/receiver proxies
+    ├── flags/flagger.kt                   # process-local host feature switches
+    ├── util/MethodUtils.kt                # visibility-respecting reflection helpers
+    └── web/InternalWebBrowser.kt          # internal HTTPS-only browser
+
+android-host/src/main/assets/snake/
+├── assets/                                # extracted Snake package assets (opaque data)
+└── res/                                   # compiled Snake resources kept opaque; not Aether R resources
+
+aether-native/                             # C++ source for libaether.so
+flutter-app/                               # Flutter module: Dart UI, logic, channels, assets
+scripts/verify_host_structure.py          # source/manifest/component registration check
+scripts/verify_apk_architecture.py        # packaged APK binary/asset check
+scripts/verify_snake_payload.py            # imported Snake assets/res inventory check
+docs/                                      # host architecture, target contract, lifecycle, JNI
+└── reference/snake-engine/                 # compact Snake virtualization-host analysis
+```
+
+The generated `flutter-app/.android/` directory is created by `flutter pub get` and is intentionally not checked in.
+
+## Current JNI contract vs target APK contract
+
+The source currently implements `com.aether.host.bridge.Native` with `initialize()`, `shutdown()`, `getVersion()`, and `runtimeState()`, registered from `JNI_OnLoad()` using `RegisterNatives()`.
+
+The supplied target architecture names `com.aether.helper.Native` (11 native methods) and `com.aether.helper.flagger` (2 native methods). Their exact declarations/descriptors are not present in this repository. The host's `com.aether.host.virtualization.flags.flagger` is a separate pure-Kotlin utility; it is not that target JNI class. Do not treat the 11+2 contract as implemented or invent signatures. The separate Snake reference has `com.snake.helper.Native`; its methods are not interchangeable with either Aether or 8 Ball Pool. See [JNI contract](docs/jni-contract.md) and the [Snake reference bundle](docs/reference/snake-engine/README.md).
+
+## Build and test
+
+Requirements: JDK 17+, Flutter 3.47.0, Android SDK API 36, Android NDK 26.3.11579264, and CMake 3.22.1. Configure the local Android SDK and Flutter SDK paths in root `local.properties`, then:
 
 ```bash
-./gradlew :android-host:assembleDebug
-./gradlew :android-host:assembleRelease
-./gradlew :android-host:test
+cd flutter-app
+flutter pub get
+cd ..
+./gradlew :android-host:assembleDebug :android-host:assembleRelease :android-host:test
+python3 scripts/verify_host_structure.py
+python3 scripts/verify_snake_payload.py
+python3 scripts/verify_apk_architecture.py android-host/build/outputs/apk/debug/android-host-debug.apk debug
+python3 scripts/verify_apk_architecture.py android-host/build/outputs/apk/release/android-host-release-unsigned.apk release
 ```
 
-ABI: `arm64-v8a` only
+Flutter tests:
 
-## JNI Contract
-
-- `Native.kt` declares 4 methods: `initialize()`, `shutdown()`, `getVersion()`, `runtimeState()`
-- `native_registry.cpp` registers via `RegisterNatives()` in `JNI_OnLoad()`
-- Never return null for String methods
-- Method count via `sizeof(kMethods)/sizeof(kMethods[0])`
-- Class path uses `/`: `com/aether/host/Native`
-
-## Flutter Channel
-
-```
-Dart → MethodChannel("aether/runtime") → Kotlin (AetherFlutterHost) → JNI → libaether.so
+```bash
+cd flutter-app
+flutter analyze
+flutter test
 ```
 
-Methods:
-- `version` -> `Native.getVersion()`
-- `state` -> `Native.runtimeState()` (code challenge implemented)
-- `initialize` -> `Native.initialize()`
-- `shutdown` -> `Native.shutdown()`
-- `ping` -> echo + state
+The release APK is unsigned by this CI build and must be signed for distribution. GitHub Actions uploads debug and release APKs as a run artifact. The supported ABI is currently `arm64-v8a`; the Flutter 3.47 engine sets the minimum Android API to 24 (Android 7.0).
 
-## Roadmap
+## Documentation
 
-- [x] Phase 0: CI skeleton
-- [x] Phase 1: Bootstrap (Native.kt + JNI_OnLoad + RegisterNatives + getVersion + runtimeState)
-- [ ] Phase 2: Native runtime state machine guards + thread_dispatcher
-- [ ] Phase 3: Flutter host (FlutterEngine lifecycle)
-- [ ] Phase 4: Message bridge protocol {requestId, method, payload}
-- [ ] Phase 5: Assets (flutter_assets, libapp.so, libflutter.so)
-- [ ] Phase 6: Testing & diagnostics (ABI arm64-v8a)
+- [Selected guest APK: 8 Ball Pool 56.30.0 and verification limits](docs/target-apk.md)
+- [Snake Engine capability notes and extraction log](docs/reference/snake-engine/README.md)
+- [Snake `assets/` and `res/` extraction details](docs/reference/snake-engine/ARCHIVE_EXTRACTION_LOG.md)
+- [Host container structure, trust boundaries, and proxy inventory](docs/host-container.md)
+- [Four-layer architecture and binary mapping](docs/architecture.md)
+- [JNI contract and unknown target signatures](docs/jni-contract.md)
+- [Android/native/Flutter lifecycle](docs/lifecycle.md)
