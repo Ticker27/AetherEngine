@@ -56,6 +56,11 @@ jobs:
             exit 1
           }
 
+      - name: Assemble androidTest sources
+        shell: bash
+        working-directory: aether-engine
+        run: ./gradlew :app:assembleDebugAndroidTest --stacktrace --console=plain
+
       - name: Verify APK contents (arm64-v8a only, libaether.so present)
         shell: bash
         run: |
@@ -160,6 +165,9 @@ jobs:
               vpn = [e for e in app.findall("service") if e.get(ns + "name") == ".helper.ProxyVpnService"][0]
               chk(vpn.get(ns + "permission") == "android.permission.BIND_VPN_SERVICE", "ProxyVpnService BIND_VPN_SERVICE")
               chk([e.get(ns + "name") for e in t.findall("uses-permission")] == ["android.permission.INTERNET"], "single INTERNET permission")
+              job = [e for e in app.findall("service") if "ProxyJobService" in e.get(ns + "name")]
+              chk(len(job) == 4 and all(e.get(ns + "permission") == "android.permission.BIND_JOB_SERVICE" for e in job),
+                  "BIND_JOB_SERVICE on all 4 ProxyJobService entries")
               unresolved = []
               for _, e in comps:
                   n = e.get(ns + "name")
@@ -194,6 +202,8 @@ jobs:
           chk("compileSdk = 35" in ag and "minSdk = 28" in ag and "targetSdk = 35" in ag, "locks: SDK 35/28/35")
           chk('abiFilters += "arm64-v8a"' in ag and ag.count("abiFilters") == 1, "locks: arm64-v8a only")
           chk("signingConfigs" not in ag, "locks: no signing config")
+          chk('testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"' in ag
+              and ag.count("androidTestImplementation(") == 3, "androidTest: runner + 3 deps configured")
           chk(open(f"{R}/gradle.properties").read() == "android.useAndroidX=true\norg.gradle.jvmargs=-Xmx2g\n",
               "locks: gradle.properties exact")
 

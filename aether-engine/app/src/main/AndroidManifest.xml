@@ -41,10 +41,10 @@
         <service android:name=".helper.ProxyService$P2" android:exported="false" />
         <service android:name=".helper.ProxyService$P3" android:exported="false" />
 
-        <service android:name=".helper.ProxyJobService$P0" android:exported="false" />
-        <service android:name=".helper.ProxyJobService$P1" android:exported="false" />
-        <service android:name=".helper.ProxyJobService$P2" android:exported="false" />
-        <service android:name=".helper.ProxyJobService$P3" android:exported="false" />
+        <service android:name=".helper.ProxyJobService$P0" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
+        <service android:name=".helper.ProxyJobService$P1" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
+        <service android:name=".helper.ProxyJobService$P2" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
+        <service android:name=".helper.ProxyJobService$P3" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <service
             android:name=".helper.ProxyVpnService"
