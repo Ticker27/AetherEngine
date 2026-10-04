@@ -1,6 +1,6 @@
 # aether-engine — Phase 1
 
-Phase 1 = visible-mechanism mirror of Snake; hidden payload intentionally omitted.
+Phase 1 = visible-mechanism mirror of the reference architecture; hidden payload intentionally omitted.
 
 ## Scope
 

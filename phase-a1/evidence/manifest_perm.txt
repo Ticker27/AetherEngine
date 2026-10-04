@@ -1,0 +1,8 @@
+# D-A1.4 evidence 1: declared permissions
+## aether-engine/app/src/main/AndroidManifest.xml:
+android:name="android.permission.INTERNET"
+[exit=0]
+
+## legacy android-host manifest (reference):
+android:name="android.permission.INTERNET"
+[exit=0]

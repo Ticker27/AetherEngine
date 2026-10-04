@@ -1,0 +1,47 @@
+# D-A1.3 RegisterNatives binding proof
+$ strings -n 1 SO | grep -E ^(ac|aior|awl|chl|djp|eio|i|ic|ilil|jpo|update)$
+i
+jpo
+ic
+djp
+aior
+chl
+ilil
+ac
+i
+awl
+update
+eio
+[exit=0]
+
+$ same, counted
+12
+[exit=0]
+
+$ strings SO | grep (default min length 4: short names omitted)
+aior
+ilil
+update
+[exit=0]
+
+$ strings -n 1 SO | JNI descriptors
+(I)[B
+(Ljava/lang/String;Ljava/lang/String;)V
+(Ljava/lang/String;)V
+(I)V
+(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V
+(I)Ljava/lang/String;
+(Ljava/lang/Object;Ljava/lang/reflect/Method;)V
+(Ljava/lang/Object;Ljava/lang/Object;)V
+[exit=0]
+
+$ objdump -d SO | grep -B2 -A2 JNI_OnLoad
+objdump: can't disassemble for architecture UNKNOWN!
+
+[exit=1]
+
+$ readelf -sW SO | grep -i JNI_OnLoad (arch-independent substitute)
+     6: 0000000000000c98   648 FUNC    GLOBAL DEFAULT   13 JNI_OnLoad
+[exit=0]
+
+# RESULT: 11 native-name strings present (strings -n 1 required). JNI_OnLoad symbol present. Disassembly UNABLE locally: see fnptr_table.txt.

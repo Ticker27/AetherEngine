@@ -1,0 +1,43 @@
+# D-A1.2 fnPtr table: ordered commands, raw output
+$ unzip -l /tmp/pa1/ae/app-debug.apk lib/arm64-v8a
+Archive:  /tmp/pa1/ae/app-debug.apk
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+     6760  1981-01-01 01:01   lib/arm64-v8a/libaether.so
+---------                     -------
+     6760                     1 file
+[exit=0]
+
+$ readelf -sW SO | grep -Ei n_ac|n_aior|n_awl|n_chl|n_djp|n_eio|n_i$|n_ic|n_ilil|n_jpo|n_update
+[exit=1]
+
+$ objdump -d --section=.text SO | grep -A1 <n_
+objdump: can't disassemble for architecture UNKNOWN!
+
+objdump: section '.text' mentioned in a -j option, but not found in any input file
+[exit=1]
+
+$ readelf -SW SO | grep -E symtab|strtab
+  [20] .shstrtab         STRTAB          0000000000000000 00144c 0000d6 00      0   0  1
+[exit=0]
+
+$ readelf -sW SO FUNC symbol list
+0000000000000000 0 FUNC GLOBAL UND __cxa_finalize@LIBC
+0000000000000000 0 FUNC GLOBAL UND __cxa_atexit@LIBC
+0000000000000000 0 FUNC GLOBAL UND __register_atfork@LIBC
+0000000000000000 0 FUNC GLOBAL UND __android_log_print
+0000000000000000 0 FUNC GLOBAL UND __stack_chk_fail@LIBC
+0000000000000c98 648 FUNC GLOBAL 13 JNI_OnLoad
+[exit=0]
+
+$ nm -a SO | head -20
+nm: /tmp/so_ae/lib/arm64-v8a/libaether.so: no symbols
+[exit=0]
+
+# RESULT: UNABLE. 0 of 11 rows obtainable statically.
+# Reason A: libaether.so is stripped: readelf -SW shows no .symtab section (grep exit 1 above).
+# Reason B: local binutils objdump has no AArch64 backend (see objdump message above); aarch64-linux-gnu-objdump is NOT-FOUND.
+# The fnPtr table is a RUNTIME artifact: logcat line native[NN] name=... fnPtr=... with LOG_TAG AetherJNI. Deferred to Phase A2 (device required).
+$ readelf -sW SO | grep JNI_OnLoad  (only exported FUNC present)
+     6: 0000000000000c98   648 FUNC    GLOBAL DEFAULT   13 JNI_OnLoad
+[exit=0]
