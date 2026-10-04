@@ -112,3 +112,4 @@ The release APK is unsigned by this CI build and must be signed for distribution
 - [JNI contract and unknown target signatures](docs/jni-contract.md)
 - [Android/native/Flutter lifecycle](docs/lifecycle.md)
 - [Phase 2 plan: guest container milestones](docs/phase2-plan.md)
+- [Guest container specification: objects, thread rules, events, error codes, control-plane payloads](docs/guest-container-spec.md)
