@@ -124,14 +124,19 @@ Sizes are t-shirt estimates (S ≤ ~1 day-equivalent, M ~ 2–4, L ~ 1–2 weeks
 
 ### M0 — Contract & spikes (S)
 
-**M0.1 Guest-container spec — `docs/guest-container-spec.md`**
+**M0.1 Guest-container spec — [`docs/guest-container-spec.md`](guest-container-spec.md)** (✅ drafted 2026-10-04; contracts only, no code)
 
 - Objects and ownership: `GuestPackage` (parsed package model), `GuestContext` (resources +
   class loader + data dirs), `GuestRuntimeAdapter` (Application/Activity bind), slot
   scheduler over `VirtualActivitySlotRegistry`.
 - Thread rules (main-thread vs worker for parse/load/bind), lifecycle event flow from proxy
   → `HostInitializer.dispatch` → listeners, stable error codes, event payloads for M5.
-- Explicit statement of what Phase 2 does **not** do (from §1 non-goals).
+- Explicit statement of what Phase 2 does **not** do (from §1 non-goals; mirrored in spec §9).
+
+**Delivered:** the spec fixes `GuestPackage`, `GuestContext`, `GuestRuntimeAdapter`/`GuestSlotScheduler`
+ownership, thread rules, the event flow and vocabulary, stable `GUEST_*` error codes, and the M5
+payloads (`guestInstall`/`guestLaunch`/`guestClose`/`guestState` + `guestEvents`). Its §10 tracks
+M0.2–M0.5, whose decisions still have to be written back into it.
 
 **M0.2 Spike A (riskiest unknown): resource & asset access**
 
