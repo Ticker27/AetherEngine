@@ -47,17 +47,6 @@ android {
     }
 
     sourceSets {
-        getByName("main") {
-            // Flutter-dependent variant (FlutterActivity + AetherRuntimeChannel + MainActivity)
-            // ถูกรวมเมื่อ :flutter project มีจริง (bootstrap ด้วย flutter pub get)
-            if (findProject(":flutter") != null) {
-                kotlin.srcDirs("src/flutterHost/kotlin")
-                manifest.srcFile("src/flutterHost/AndroidManifest.xml")
-            } else {
-                // host-only: launcher = MainActivityHostOnly (stub ไม่ผูก flutter)
-                manifest.srcFile("src/main/AndroidManifest.xml")
-            }
-        }
         getByName("test") {
             kotlin.srcDirs("src/test/kotlin")
         }
@@ -90,11 +79,8 @@ kotlin {
 dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
 
-    // Host-only builds (no Flutter SDK) omit this dependency; the engine is
-    // then provided at runtime by HostInitializer's reflection path.
-    if (findProject(":flutter") != null) {
-        implementation(project(":flutter"))
-    }
+    // settings.gradle.kts includes the generated Flutter module after `flutter pub get`.
+    implementation(project(":flutter"))
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.mockito:mockito-core:5.11.0")

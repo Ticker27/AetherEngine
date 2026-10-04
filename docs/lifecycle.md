@@ -73,7 +73,7 @@ Rendering, frame scheduling, semantics, textures, and Flutter runtime services s
 HostInitializer.loadTargetApk(file, trustPolicy)  [worker thread]
   ├── DYNAMIC_APK_LOADING switch must be enabled
   ├── DynamicApkLoader copies APK into private storage
-  ├── exact package + signer pins are verified
+  ├── exact 8 Ball Pool 56.30.0 package/version + signer pins are verified
   └── read-only APK → DexClassLoader → LoadedGuestApk metadata
 
 Android invokes a declared, internal proxy component
@@ -103,6 +103,6 @@ Listeners are invoked synchronously. They must avoid long-running work on the ma
 - Native operation failure → channel error `NATIVE_ERROR`.
 - Unknown MethodChannel method → `notImplemented`.
 - Kotlin `String` JNI results declared non-null → always return a valid string.
-- JVM tests cover signer-pin validation, feature switches, reflection visibility, and native state transitions.
+- JVM tests cover the exact 8 Ball Pool package/version/version-code gate, signer-pin validation, feature switches, reflection visibility, and native state transitions.
 - CI builds debug/release APKs, checks that both native lanes and Flutter assets are packaged, runs Android/native/Flutter tests, and uploads the APKs.
 - Instrumentation tests for real guest Activity attachment remain future work because the guest component model is not implemented.

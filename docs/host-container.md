@@ -26,6 +26,7 @@ com.aether.host/
 │   ├── Native.kt                            # custom libaether.so facade
 │   └── AetherRuntimeChannel.kt              # Flutter MethodChannel handler
 ├── bootstrap/HostInitializer.kt
+├── target/TargetApkContract.kt                # fixed external guest release identity
 └── virtualization/
     ├── activity/
     │   ├── VirtualActivity.kt
@@ -48,7 +49,7 @@ com.aether.host/
 | --- | --- | --- |
 | Android/Flutter bootstrap | `AetherApplication`, `MainActivity` (`FlutterActivity`), `HostInitializer` | Initializes the custom native runtime, starts the embedded Flutter/Dart app through the Android embedding, owns guest metadata, and relays proxy lifecycle events |
 | Flutter platform messages | `AetherRuntimeChannel` | Registers `MethodChannel("aether/runtime")` on the Flutter engine and routes supported calls to the host's separate JNI facade |
-| DEX loader | `DynamicApkLoader`, `GuestApkTrustPolicy` | Copies a selected APK into private storage, checks exact package and trusted signer pins, then creates a `DexClassLoader` |
+| DEX loader | `DynamicApkLoader`, `GuestApkTrustPolicy` | Copies an APK into private storage, requires 8 Ball Pool 56.30.0 (4028) and configured signer pins, then creates a `DexClassLoader` |
 | Activity | `VirtualActivity`, `ProxyActivityP0..P3`, `ProxyActivityP0_L..P3_L` | Four standard slots and four landscape slots; forwards Activity lifecycle events |
 | Transparent Activity | `TransparentProxyActivityP0..P3` | Four translucent, private slots; no fallback UI is drawn when unattached |
 | Pending Activity | `ProxyPendingActivityP0..P3` | Four private slots reserved for host-created PendingIntent flows |
@@ -69,7 +70,7 @@ com.aether.host/
 1. Android creates `AetherApplication`.
 2. `HostInitializer.initialize()` initializes Aether's own native runtime and records `READY` or a degraded/failed status.
 3. A caller may enable `HostFeature.DYNAMIC_APK_LOADING` and call `loadTargetApk(file, trustPolicy)` from a worker thread. Loading remains disabled by default.
-4. `DynamicApkLoader` copies the selected file into the app's private `noBackupFilesDir`, parses its package/signers, compares them against an explicit trust policy, makes the cached APK read-only, and then creates a `DexClassLoader`.
+4. `DynamicApkLoader` copies the selected file into the app's private `noBackupFilesDir`, parses its package/version/signers, requires exactly `com.miniclip.eightballpool` version `56.30.0` (version code `4028`) plus explicit signer pins, makes the cached APK read-only, and then creates a `DexClassLoader`.
 5. A proxy Android component reports lifecycle events to `HostInitializer`; registered `HostComponentListener`s can observe/route those events. The event callback is synchronous and should not retain Activity/Service instances after their lifecycle ends.
 6. `HostInitializer.shutdown()` drops loaded-guest references and shuts down Aether's native runtime when the process is explicitly terminated.
 
@@ -78,7 +79,7 @@ com.aether.host/
 ## Trust and security constraints
 
 - APK code loaded by `DexClassLoader` executes in Aether's process with Aether's UID, permissions, and access to in-process objects. This is **not isolation**; never load an untrusted APK.
-- The caller must supply the exact expected package name and SHA-256 signer certificate pins. Every signer reported for the archive must be pinned. A package-name match alone is insufficient.
+- The target package/version is fixed to `com.miniclip.eightballpool` 56.30.0 (version code `4028`). The caller must supply SHA-256 signer certificate pins computed from the actual APK; every signer reported for the archive must be pinned. A package/version match alone is insufficient. See [the target APK record](target-apk.md).
 - The APK is copied to app-private storage before validation/loading, and the code file is made read-only to reduce mutation/TOCTOU risk.
 - The current loader supports DEX code only. It does not extract/load guest native libraries or merge guest resources/assets.
 - Activity/process hooks, hidden API bypasses, signature spoofing, permission escalation, and package-manager spoofing are intentionally not implemented.

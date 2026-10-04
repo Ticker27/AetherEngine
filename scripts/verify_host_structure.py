@@ -17,6 +17,7 @@ REQUIRED_FILES = [
     "android-host/src/main/kotlin/com/aether/host/bootstrap/HostInitializer.kt",
     "android-host/src/main/kotlin/com/aether/host/bridge/Native.kt",
     "android-host/src/main/kotlin/com/aether/host/bridge/AetherRuntimeChannel.kt",
+    "android-host/src/main/kotlin/com/aether/host/target/TargetApkContract.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/loader/DynamicApkLoader.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/loader/GuestApkTrustPolicy.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/activity/VirtualActivity.kt",
@@ -41,12 +42,12 @@ REQUIRED_FILES = [
     "flutter-app/pubspec.yaml",
     "scripts/verify_apk_architecture.py",
     "docs/host-container.md",
+    "docs/target-apk.md",
+    "docs/reference/snake-engine/README.md",
     "android-host/src/main/kotlin/com/aether/host/runtime/AetherRuntime.kt",
     "android-host/src/main/kotlin/com/aether/host/runtime/HostLifecycle.kt",
     "android-host/src/test/kotlin/com/aether/host/runtime/AetherRuntimeTest.kt",
-    "android-host/src/flutterHost/kotlin/com/aether/host/MainActivity.kt",
-    "android-host/src/flutterHost/kotlin/com/aether/host/bridge/AetherRuntimeChannel.kt",
-    "android-host/src/main/kotlin/com/aether/host/MainActivityHostOnly.kt",
+    "android-host/src/main/kotlin/com/aether/host/MainActivity.kt",
 ]
 
 PACKAGE = "com.aether.host.virtualization"
@@ -75,7 +76,7 @@ PROVIDERS = [
 
 SOURCE_CLASSES = {
     "AetherApplication": "android-host/src/main/kotlin/com/aether/host/AetherApplication.kt",
-    "MainActivity": "android-host/src/flutterHost/kotlin/com/aether/host/MainActivity.kt",
+    "MainActivity": "android-host/src/main/kotlin/com/aether/host/MainActivity.kt",
     "ProxyActivityP0": "android-host/src/main/kotlin/com/aether/host/virtualization/activity/ProxyActivity.kt",
     "ProxyActivityP1": "android-host/src/main/kotlin/com/aether/host/virtualization/activity/ProxyActivity.kt",
     "ProxyActivityP2": "android-host/src/main/kotlin/com/aether/host/virtualization/activity/ProxyActivity.kt",
@@ -131,6 +132,18 @@ def main() -> None:
     for relative in REQUIRED_FILES:
         if not (ROOT / relative).is_file():
             fail(f"missing required host file: {relative}")
+
+    target_contract_path = (
+        ROOT / "android-host/src/main/kotlin/com/aether/host/target/TargetApkContract.kt"
+    )
+    target_contract = target_contract_path.read_text()
+    required_target_values = (
+        'const val PACKAGE_NAME = "com.miniclip.eightballpool"',
+        'const val VERSION_NAME = "56.30.0"',
+        "const val VERSION_CODE = 4028L",
+    )
+    if any(value not in target_contract for value in required_target_values):
+        fail("target release contract must remain pinned to 8 Ball Pool 56.30.0 (4028)")
 
     for simple_name, relative in SOURCE_CLASSES.items():
         source = (ROOT / relative).read_text()
@@ -204,11 +217,15 @@ def main() -> None:
     host_gradle = (ROOT / "android-host/build.gradle.kts").read_text()
     settings_gradle = (ROOT / "settings.gradle.kts").read_text()
     flutter_pubspec = (ROOT / "flutter-app/pubspec.yaml").read_text()
-    channel_source = (ROOT / "android-host/src/flutterHost/kotlin/com/aether/host/bridge/AetherRuntimeChannel.kt").read_text()
+    channel_source = (ROOT / "android-host/src/main/kotlin/com/aether/host/bridge/AetherRuntimeChannel.kt").read_text()
     if 'implementation(project(":flutter"))' not in host_gradle:
         fail("Android host must depend on the generated Flutter module")
+    if "manifest.srcFile" in host_gradle or "src/flutterHost" in host_gradle:
+        fail("Android host must use the canonical src/main manifest and Kotlin source tree")
     if 'flutter-app/.android/include_flutter.groovy' not in settings_gradle:
         fail("Gradle settings must include the generated Flutter module project")
+    if "throw GradleException" not in settings_gradle:
+        fail("Gradle settings must fail clearly when the Flutter module has not been bootstrapped")
     if not re.search(r"(?m)^\s+module:\s*$", flutter_pubspec):
         fail("flutter-app must declare Flutter module metadata for Add-to-App")
     if 'const val CHANNEL_NAME = "aether/runtime"' not in channel_source:

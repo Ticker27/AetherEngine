@@ -13,6 +13,8 @@ import java.security.MessageDigest
 /** Result of loading a verified guest APK's DEX code into the host process. */
 data class LoadedGuestApk internal constructor(
     val packageName: String,
+    val versionName: String,
+    val versionCode: Long,
     val apkFile: File,
     val classLoader: ClassLoader,
     val apkSha256: String,
@@ -23,8 +25,8 @@ class GuestApkLoadException(message: String, cause: Throwable? = null) :
     IllegalStateException(message, cause)
 
 /**
- * Copies an explicitly selected APK into private, read-only host storage, verifies its
- * package and signer pins, then creates a DexClassLoader for its DEX code.
+ * Copies an explicitly selected APK into private, read-only host storage, verifies the
+ * exact target package/version and signer pins, then creates a DexClassLoader for its DEX code.
  *
  * This is a code loader, not an Android sandbox or a complete Activity virtualization
  * engine. Loaded code runs inside this process with the host UID and permissions. Native
@@ -67,7 +69,12 @@ class DynamicApkLoader(
             copyAndSync(sourceApk, incoming)
             val packageInfo = readPackageInfo(incoming)
             val signers = signerDigests(packageInfo)
-            trustPolicy.verify(packageInfo.packageName, signers)
+            trustPolicy.verify(
+                packageName = packageInfo.packageName,
+                versionName = packageInfo.versionName,
+                versionCode = packageInfo.compatVersionCode(),
+                signerSha256 = signers,
+            )
             val apkDigest = sha256(incoming)
             val cachedApk = File(privateDirectory, "$apkDigest.apk")
 
@@ -93,7 +100,13 @@ class DynamicApkLoader(
             }
 
             val cachedInfo = readPackageInfo(cachedApk)
-            val cachedSigners = trustPolicy.verify(cachedInfo.packageName, signerDigests(cachedInfo))
+            val cachedSigners = signerDigests(cachedInfo)
+            trustPolicy.verify(
+                packageName = cachedInfo.packageName,
+                versionName = cachedInfo.versionName,
+                versionCode = cachedInfo.compatVersionCode(),
+                signerSha256 = cachedSigners,
+            )
             val cachedDigest = sha256(cachedApk)
             if (cachedDigest != apkDigest) {
                 throw GuestApkLoadException("Private guest APK cache failed integrity verification")
@@ -109,9 +122,13 @@ class DynamicApkLoader(
                 throw GuestApkLoadException("DEX optimization path is not a directory")
             }
 
+            val guestVersionName = cachedInfo.versionName
+                ?: throw GuestApkLoadException("Guest APK has no version name")
             val guest = try {
                 LoadedGuestApk(
                     packageName = cachedInfo.packageName,
+                    versionName = guestVersionName,
+                    versionCode = cachedInfo.compatVersionCode(),
                     apkFile = cachedApk,
                     classLoader = DexClassLoader(
                         cachedApk.absolutePath,
@@ -158,6 +175,12 @@ class DynamicApkLoader(
         return appContext.packageManager.getPackageArchiveInfo(apk.absolutePath, flags)
             ?: throw GuestApkLoadException("File is not a valid Android APK archive")
     }
+
+    private fun PackageInfo.compatVersionCode(): Long =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) longVersionCode else legacyVersionCode(this)
+
+    @Suppress("DEPRECATION")
+    private fun legacyVersionCode(packageInfo: PackageInfo): Long = packageInfo.versionCode.toLong()
 
     private fun signerDigests(packageInfo: PackageInfo): Set<String> {
         val signatures: Array<Signature> = (

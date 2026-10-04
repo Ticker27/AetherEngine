@@ -1,24 +1,25 @@
 package com.aether.host.virtualization.loader
 
+import com.aether.host.target.TargetApkContract
 import java.util.Locale
 
 /**
- * Explicit trust pins for a single guest package.
- *
- * APK code executes in the host process with the host UID and permissions. A package
- * name alone is not a trust decision; at least one trusted signing-certificate SHA-256
- * fingerprint must be configured by the host operator.
+ * Exact package/version gate plus explicit signer pins for the selected target APK.
+ * The version identity is deliberately fixed to APKPure's 8 Ball Pool 56.30.0 listing;
+ * signer SHA-256 pins still have to come from the actual APK certificate.
  */
 class GuestApkTrustPolicy(
-    val expectedPackageName: String,
     trustedSignerSha256: Set<String>,
 ) {
+    val expectedPackageName: String = TargetApkContract.PACKAGE_NAME
+    val expectedVersionName: String = TargetApkContract.VERSION_NAME
+    val expectedVersionCode: Long = TargetApkContract.VERSION_CODE
+
     val trustedSignerSha256: Set<String> = trustedSignerSha256
         .map(::normalizeFingerprint)
         .toSet()
 
     init {
-        require(expectedPackageName.isNotBlank()) { "Expected package name must not be blank" }
         require(this.trustedSignerSha256.isNotEmpty()) {
             "At least one trusted signer SHA-256 fingerprint is required"
         }
@@ -27,11 +28,22 @@ class GuestApkTrustPolicy(
         }
     }
 
-    /** Returns normalized signer fingerprints if the archive matches this trust policy. */
-    fun verify(packageName: String, signerSha256: Set<String>): Set<String> {
+    /** Returns normalized signer pins only when package, exact release, and signers match. */
+    fun verify(
+        packageName: String,
+        versionName: String?,
+        versionCode: Long,
+        signerSha256: Set<String>,
+    ): Set<String> {
         if (packageName != expectedPackageName) {
             throw UntrustedGuestApkException(
                 "Package mismatch: expected $expectedPackageName, found $packageName",
+            )
+        }
+        if (versionName != expectedVersionName || versionCode != expectedVersionCode) {
+            throw UntrustedGuestApkException(
+                "Version mismatch: expected $expectedVersionName ($expectedVersionCode), " +
+                    "found ${versionName ?: "<missing>"} ($versionCode)",
             )
         }
 

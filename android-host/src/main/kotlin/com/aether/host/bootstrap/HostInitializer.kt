@@ -97,8 +97,8 @@ class HostInitializer(application: Application) {
     }
 
     /**
-     * Loads a user-selected guest APK only when the process-local feature switch is enabled
-     * and a package+signer trust policy is supplied. Call on a worker thread.
+     * Loads the selected 8 Ball Pool 56.30.0 APK only when the process-local feature switch
+     * is enabled and explicit signer pins are supplied. Call on a worker thread.
      */
     @Synchronized
     fun loadTargetApk(apkFile: File, trustPolicy: GuestApkTrustPolicy): LoadedGuestApk {
@@ -107,7 +107,7 @@ class HostInitializer(application: Application) {
             "Dynamic APK loading is disabled"
         }
 
-        // The policy is supplied per request so one guest's trust pins cannot authorize another.
+        // The policy fixes package/version and requires explicit signer pins for this target.
         val guest = DynamicApkLoader(appContext, trustPolicy).load(apkFile)
         loadedGuest = guest
         dispatch(

@@ -59,6 +59,25 @@ The diagram's arrow between native lanes is conceptual coordination, not a direc
 
 The debug APK contains the Flutter debug runtime and Dart debug payload. The release APK is additionally required by CI to contain `libapp.so` (Dart AOT). The custom CMake target only builds `libaether.so`; the Flutter tooling builds and packages its own engine, Dart code, and assets.
 
+### Separate guest APK lane
+
+```text
+External 8 Ball Pool APK (not in this repository or host APK)
+        │
+        ▼
+TargetApkContract: com.miniclip.eightballpool / 56.30.0 / 4028
+        │
+        ▼
+GuestApkTrustPolicy: exact identity + configured signer pins
+        │
+        ▼
+DynamicApkLoader → DexClassLoader (DEX loading only)
+
+No guest Activity launch, native-library loading, Flutter embedding, or sandbox is provided.
+```
+
+This guest lane is separate from Aether's Dart app, Flutter Engine, and `libaether.so`. The external APK is not a Flutter module and its runtime has not been established from a verified binary. See [the target APK record](target-apk.md) and the distinct [Snake Engine reference bundle](reference/snake-engine/README.md).
+
 ## Two JNI paths and the message path
 
 ### Aether custom JNI
@@ -117,6 +136,7 @@ AetherEngine/
 │           ├── bridge/
 │           │   ├── Native.kt                 # custom JNI facade; 4 known methods
 │           │   └── AetherRuntimeChannel.kt    # Dart platform-message handler
+│           ├── target/TargetApkContract.kt   # external guest identity; no APK binary
 │           └── virtualization/                # loader, proxies, providers, services
 ├── aether-native/src/main/cpp/                 # C++ source for libaether.so
 ├── flutter-app/                                # Flutter add-to-app module / Dart app
@@ -151,9 +171,9 @@ The target counts (11 + 2) must not be presented as already implemented. Before 
 
 ## The Host and arbitrary guest APKs
 
-`DynamicApkLoader` copies a selected APK into private storage, verifies the configured package and signer pins, and creates a DEX class loader. `VirtualActivity` and the declared proxy pools relay lifecycle events to `HostInitializer`. These pieces are a host-container foundation, **not** a complete Android app virtualization implementation. A class loader is not a sandbox and does not make arbitrary guest Activity, Service, Provider, resources, permissions, or task/back-stack behavior work automatically.
+`DynamicApkLoader` copies a selected APK into private storage, verifies the fixed target identity (`com.miniclip.eightballpool`, version `56.30.0`, code `4028`) and configured signer pins, and creates a DEX class loader. `VirtualActivity` and the declared proxy pools relay lifecycle events to `HostInitializer`. These pieces are a host-container foundation, **not** a complete Android app virtualization implementation. The exact target APK has not yet been inspected; see [the target APK record](target-apk.md). A class loader is not a sandbox and does not make arbitrary guest Activity, Service, Provider, resources, permissions, or task/back-stack behavior work automatically.
 
-Running an arbitrary target APK without root requires an app-specific compatible guest runtime/component model (or a target built as a Flutter module and packaged into the host). That implementation also needs an explicit security model because guest code loaded into this process has the host UID/permissions. No root access, hidden-API bypass, signature spoofing, or permission escalation is used here.
+Running this selected APK without root requires inspecting its actual runtime and then implementing a compatible guest component model or another supported integration path. The listing does not establish that 8 Ball Pool is a Flutter module; an arbitrary APK cannot be treated as one. If the exact APK is Flutter-based, Flutter Add-to-App still requires an appropriate module/build integration rather than `DexClassLoader` alone. Any in-process guest code also has the host UID/permissions, so an explicit security model is required. No root access, hidden-API bypass, signature spoofing, or permission escalation is used here.
 
 ## Build and verify
 

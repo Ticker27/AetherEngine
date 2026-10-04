@@ -5,6 +5,8 @@ A regular Android host application that embeds the Aether Flutter/Dart applicati
 > **What works now:** `MainActivity` is a real `FlutterActivity`; the Android host builds and packages Aether's `libaether.so`, Flutter's `libflutter.so`, Flutter assets, and (in release) Dart AOT `libapp.so`. The APK installs and runs through Android's normal app model; root is not required.
 >
 > **Important limit:** `DynamicApkLoader` only verifies and loads DEX code. It is not a sandbox and does not run an arbitrary APK's Android components automatically. Guest code shares the host UID and permissions. See [The Host container design](docs/host-container.md).
+>
+> **Selected guest target:** only 8 Ball Pool `com.miniclip.eightballpool` version `56.30.0` (version code `4028`) is accepted by the trust policy. The exact game APK has not been inspected, and the current loader does not launch it. Snake Engine analysis is retained as a separate reference bundle, not treated as evidence for the target. See [target APK](docs/target-apk.md) and [Snake reference](docs/reference/snake-engine/README.md).
 
 ## Runtime architecture
 
@@ -44,8 +46,9 @@ android-host/src/main/kotlin/com/aether/host/
 │   ├── Native.kt                         # custom libaether.so facade (4 known methods)
 │   └── AetherRuntimeChannel.kt            # Flutter platform-message handler
 ├── bootstrap/HostInitializer.kt          # process/native and proxy lifecycle coordinator
+├── target/TargetApkContract.kt            # pinned external guest release identity
 └── virtualization/
-    ├── loader/                            # DynamicApkLoader + signer trust policy
+    ├── loader/                            # APK loading + signer policy
     ├── activity/                          # VirtualActivity and proxy Activity pools
     ├── components/                        # service/provider/receiver proxies
     ├── flags/flagger.kt                   # process-local host feature switches
@@ -56,7 +59,8 @@ aether-native/                             # C++ source for libaether.so
 flutter-app/                               # Flutter module: Dart UI, logic, channels, assets
 scripts/verify_host_structure.py          # source/manifest registration check
 scripts/verify_apk_architecture.py        # packaged APK binary/asset check
-docs/                                      # architecture, lifecycle, JNI, host boundaries
+docs/                                      # host architecture, target contract, lifecycle, JNI
+└── reference/snake-engine/                 # separate Snake evidence bundle; not the 8 Ball Pool target
 ```
 
 The generated `flutter-app/.android/` directory is created by `flutter pub get` and is intentionally not checked in.
@@ -65,7 +69,7 @@ The generated `flutter-app/.android/` directory is created by `flutter pub get` 
 
 The source currently implements `com.aether.host.bridge.Native` with `initialize()`, `shutdown()`, `getVersion()`, and `runtimeState()`, registered from `JNI_OnLoad()` using `RegisterNatives()`.
 
-The supplied target architecture names `com.aether.helper.Native` (11 native methods) and `com.aether.helper.flagger` (2 native methods). Their exact declarations/descriptors are not present in this repository. The host's `com.aether.host.virtualization.flags.flagger` is a separate pure-Kotlin utility; it is not that target JNI class. Do not treat the 11+2 contract as implemented or invent signatures. See [JNI contract](docs/jni-contract.md).
+The supplied target architecture names `com.aether.helper.Native` (11 native methods) and `com.aether.helper.flagger` (2 native methods). Their exact declarations/descriptors are not present in this repository. The host's `com.aether.host.virtualization.flags.flagger` is a separate pure-Kotlin utility; it is not that target JNI class. Do not treat the 11+2 contract as implemented or invent signatures. The separate Snake reference has `com.snake.helper.Native`; its methods are not interchangeable with either Aether or 8 Ball Pool. See [JNI contract](docs/jni-contract.md) and the [Snake reference bundle](docs/reference/snake-engine/README.md).
 
 ## Build and test
 
@@ -93,6 +97,8 @@ The release APK is unsigned by this CI build and must be signed for distribution
 
 ## Documentation
 
+- [Selected guest APK: 8 Ball Pool 56.30.0 and verification limits](docs/target-apk.md)
+- [Snake Engine evidence bundle and integrity caveats](docs/reference/snake-engine/README.md)
 - [Host container structure, trust boundaries, and proxy inventory](docs/host-container.md)
 - [Four-layer architecture and binary mapping](docs/architecture.md)
 - [JNI contract and unknown target signatures](docs/jni-contract.md)
