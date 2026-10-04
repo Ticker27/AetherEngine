@@ -184,16 +184,16 @@ jobs:
               s = open(f"{R}/app/src/main/kotlin/com/aether/helper/{f}.kt").read()
               chk(all(re.search(rf"class P{i} : {f}\(\)", s) for i in range(4)), f"{f}: real nested P0..P3")
 
-          # 5) forbidden tokens (§15); whitelist only the mandated deliverable-8 README sentence
+          # 5) forbidden tokens (§15) - no exemption; the Phase 1 README line was reworded per D-A1.6
           pat = re.compile(r"snake|eightball|miniclip|\.mytext|\bmmap\b|\brwx\b|\bprctl\b|\bptrace\b", re.I)
           stray = []
           for dp, _, fs in os.walk(R):
               for fn in fs:
                   p = os.path.join(dp, fn)
                   for i, line in enumerate(open(p, encoding="utf-8", errors="ignore"), 1):
-                      if pat.search(line) and not line.strip().startswith("Phase 1 = visible-mechanism mirror of"):
+                      if pat.search(line):
                           stray.append((p, i, line.strip()))
-          chk(not stray, f"no forbidden tokens outside mandated README line (stray: {stray})")
+          chk(not stray, f"no forbidden tokens anywhere in {R} (stray: {stray})")
 
           # 6) locked parameters (§1)
           ag = open(f"{R}/app/build.gradle.kts").read()
@@ -206,6 +206,24 @@ jobs:
               and ag.count("androidTestImplementation(") == 3, "androidTest: runner + 3 deps configured")
           chk(open(f"{R}/gradle.properties").read() == "android.useAndroidX=true\norg.gradle.jvmargs=-Xmx2g\n",
               "locks: gradle.properties exact")
+
+          # 7) Phase 1 contract guards (D-A1.7, static equivalents of the .so-level checks)
+          chk([n for n, _ in jm] == ["ac", "aior", "awl", "chl", "djp", "eio", "i", "ic", "ilil", "jpo", "update"],
+              "JNI: the 11 registered native names, in kMethods order")
+          perm_ids = re.findall(r'android:name="(android\.permission\.[A-Z_]+)"', raw)
+          chk(perm_ids == ["android.permission.INTERNET"], "manifest: INTERNET is the only permission")
+          cm = open(f"{R}/app/src/main/cpp/CMakeLists.txt").read()
+          chk(re.findall(r"target_link_libraries\([^)]*\)", cm) == ["target_link_libraries(aether PRIVATE log)"],
+              "libaether.so links only liblog (keeps NEEDED <= 4, see phase-a1/evidence/needed.txt)")
+          net = []
+          netpat = re.compile(r"\b(socket|connect|sendto|recvfrom)\s*\(")
+          for dp, _, fs in os.walk(f"{R}/app/src/main"):
+              for fn in fs:
+                  p = os.path.join(dp, fn)
+                  for i, line in enumerate(open(p, encoding="utf-8", errors="ignore"), 1):
+                      if netpat.search(line):
+                          net.append((p, i, line.strip()))
+          chk(not net, f"no socket/connect/sendto/recvfrom usage in main sources (hits: {net})")
 
           print("\nRESULT:", "ALL CHECKS PASSED" if not fail else f"{len(fail)} FAILURES: {fail}")
           sys.exit(1 if fail else 0)

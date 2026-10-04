@@ -1,0 +1,25 @@
+# D-A1.1 build proof: artifacts from run 37217095131 (AetherEngine CI) and 37217095084 (aether-engine), commit d28c3ff12f22fc6df1446756dd798cdf4bf405a4
+$ gh api repos/Ticker27/AetherEngine/actions/runs/37217095131/artifacts --jq
+{"expired":false,"name":"aether-host-apks-d28c3ff12f22fc6df1446756dd798cdf4bf405a4","size_in_bytes":53117486}
+[exit=0]
+
+$ gh api repos/Ticker27/AetherEngine/actions/runs/37217095084/artifacts --jq
+{"name":"aether-engine-debug-d28c3ff12f22fc6df1446756dd798cdf4bf405a4","size_in_bytes":742381}
+[exit=0]
+
+$ ls -l downloaded
+-rw-r--r-- 1 root root  2367724 Oct  4 16:51 /tmp/pa1/ae/app-debug.apk
+-rw-r--r-- 1 root root 53117486 Oct  4 16:51 /tmp/pa1/legacy-artifact.zip
+-rw-r--r-- 1 root root 78820217 Oct  4 16:51 /tmp/pa1/legacy/debug/android-host-debug.apk
+-rw-r--r-- 1 root root 19741412 Oct  4 16:51 /tmp/pa1/legacy/release/android-host-release-unsigned.apk
+[exit=0]
+
+$ sha256sum artifact archive
+b0597a9008b77b8711df6ba13a2d9d3cc8296be5ecaf2e7bba3d7b95a20f67e4  /tmp/pa1/legacy-artifact.zip
+[exit=0]
+
+$ sha256sum apk files
+f3e42765fc236168a4dbeac094c6b21d9b80f476c02d303496eee73f0deb914c  /tmp/pa1/legacy/debug/android-host-debug.apk
+963814b522cbb4da08459ea2839e88a888e14b7d9ec84d9fd82debc2efedaae7  /tmp/pa1/legacy/release/android-host-release-unsigned.apk
+1780b7b1b102ffdd25db457a5eb022b2e48c4b922be60a701c042f5d15b01c47  /tmp/pa1/ae/app-debug.apk
+[exit=0]

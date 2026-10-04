@@ -1,0 +1,20 @@
+# D-A1.4 NO-NET-OK, static, 4 evidences
+## EVIDENCE 1: manifest permissions (aether-engine Phase 1)
+android:name="android.permission.INTERNET"
+[exit=0]
+
+## EVIDENCE 2: network API grep in aether-engine/app/src/main (expect 0 matches)
+[grep exit=1] (1 = zero matches)
+
+## EVIDENCE 3: dynamic NEEDED entries of libaether.so
+ 0x0000000000000001 (NEEDED)             Shared library: [liblog.so]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so]
+ 0x0000000000000001 (NEEDED)             Shared library: [libdl.so]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so]
+[exit=0]
+
+## EVIDENCE 4: socket family symbols (expect 0)
+[grep exit=1] (1 = zero matches)
+
+# STATIC VERDICT: NO-NET-OK holds for all four static evidences on the Phase 1 .so.
+# Runtime netstat before/after is deferred to Phase A2 (device required).
