@@ -17,6 +17,12 @@ Historical note: `phase-a1/evidence/artifacts.txt` records the pre-fix artifact 
 
 **No rename of the module was performed** (spec intent for the legacy host remains `android-host`); renaming would change the applicationId / Flutter coupling and invalidate previously collected CI evidence.
 
+## Round status (PHASE-A1.5-CLOSE)
+
+- D-A15.5 (this file) was written in the A1.5 prep round and is unchanged in content: MM-01 / MM-12 are **cosmetic**, the audit v5 module name **`android-host`** was correct, and the original mismatch was the artifact **label string**, not module identity.
+- The label is now `android-host-apks-${{ github.sha }}`; the A1.5 close round adds the regression guards for it in `.github/workflows/aether-engine.yml` (module-vs-label equality, absence of the stale `aether-host-apks` string, and debug-only scoping of the unstripped-debug fix).
+- No module rename was performed and none is planned.
+
 ## Related observation (not a correction)
 
 The ordered static commands for the fnPtr table target `app-debug.apk` / `n_*` symbols, which exist only in the **aether-engine** artifact (`aether-engine-debug-d28c3ff…`), while the artifact named in D-A1.1 is the **legacy** host artifact. Both were analysed; the legacy `.so` carries a different (4-method) JNI contract and 6 `NEEDED` entries (`phase-a1/evidence/needed.txt`, `symbols.txt`). Phase 1 DoD evidence is reported against the aether-engine artifact.

@@ -1,15 +1,15 @@
 # Phase A2 plan (plan only — not executed in this round)
 
-Runtime DoD: AC-4, AC-5, AC-9, AC-10, AC-12 (runtime netstat), plus the fnPtr table that static analysis cannot produce (see `phase-a1/evidence/fnptr_table.txt` → UNABLE: stripped `.so`, no local AArch64 disassembler; background in `docs/decisions/unstripped-debug.md`).
+Runtime DoD: AC-4, AC-5, AC-9, AC-10, AC-12 (runtime netstat), plus the on-device confirmation of the fnPtr table whose static form is already closed (`phase-a1/evidence/fnptr_table.txt` → 11/11 rows since D-C1.2; background in `docs/decisions/unstripped-debug.md`).
 
 ## Preconditions
 
 - arm64-v8a device or emulator, API 28 or higher — the APK ships `arm64-v8a` only (`abiFilters`), so an x86 emulator cannot install it.
 - `adb` reachable from the operator host; `aether-engine/app/build/outputs/apk/debug/app-debug.apk` present (from `./gradlew :app:assembleDebug`).
 
-## Device checklist — run in order
+## Runtime checklist — run in order
 
-All commands run from the `aether-engine/` directory unless stated.
+All commands run from the `aether-engine/` directory unless stated. Column **AC** maps each command to the acceptance criterion its output closes; the logcat lines behind AC-4/5/9/10/12 are listed under "Expected logcat content". The combined form `adb logcat -c && adb shell am start -n com.aether/.Entry` is steps 4+5 below.
 
 | # | command | expected output | AC |
 |---|---|---|---|
@@ -22,7 +22,7 @@ All commands run from the `aether-engine/` directory unless stated.
 | 7 | `adb shell am startservice -n com.aether/.helper.DaemonService` | `Starting service Intent { … }` | AC-10 |
 | 8 | `adb shell am force-stop com.aether` | (no output) | AC-10 |
 | 9 | `adb shell netstat -tunp > /tmp/net_after.txt` | post-run snapshot | AC-12 |
-| 10 | `adb logcat -d > aether_logcat.txt` | captured log | AC-4/5/9/10 |
+| 10 | `adb logcat -d > /tmp/aether_logcat.txt` | captured log | AC-4/5/9/10 |
 | 11 | `diff /tmp/net_before.txt /tmp/net_after.txt \| grep -i com.aether \|\| echo "NO-NET-OK"` | `NO-NET-OK` | AC-12 |
 | 12 | `adb shell am instrument -w -e class com.aether.NativeContractTest com.aether.test/androidx.test.runner.AndroidJUnitRunner` | `OK (5 tests)` | AC-7/8 |
 
@@ -38,7 +38,7 @@ All commands run from the `aether-engine/` directory unless stated.
 
 ## fnPtr table (A2 artifact)
 
-From step 10, parse the 11 `AetherJNI: native[NN] name=… fnPtr=0x…` lines into a `name | address | section` table (section resolved with `readelf -SW`, since the shipped `.so` is stripped — see `docs/decisions/unstripped-debug.md`). This closes the `UNABLE` entry in `phase-a1/evidence/fnptr_table.txt`.
+The static table is already recorded (11/11 rows, D-A1.2 closed): `phase-a1/evidence/fnptr_table.txt` holds idx / registered name / stub symbol / address / section, plus the `kMethods` relocations that carry the registered pointers. Step 10 confirms it on device: the 11 `AetherJNI: native[NN] name=… fnPtr=0x…` lines must (a) appear in kMethods order and (b) be spaced by 24 bytes, because the logged values are runtime addresses (`fnPtr=%p`), i.e. **static address + the library load base** — read that base from `adb shell cat /proc/<pid>/maps | grep libaether.so` before comparing absolute values.
 
 ## Close condition
 

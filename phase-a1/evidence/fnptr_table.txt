@@ -1,43 +1,208 @@
-# D-A1.2 fnPtr table: ordered commands, raw output
-$ unzip -l /tmp/pa1/ae/app-debug.apk lib/arm64-v8a
-Archive:  /tmp/pa1/ae/app-debug.apk
-  Length      Date    Time    Name
----------  ---------- -----   ----
-     6760  1981-01-01 01:01   lib/arm64-v8a/libaether.so
----------                     -------
-     6760                     1 file
+# D-A1.2 fnPtr table — RESOLVED STATICALLY (replaces the UNABLE record of the A1 round)
+
+# Provenance
+#   workflow/job : GitHub Actions run 37250641393, workflow "Aether Engine Phase 1 (Build, Test, Release)",
+#                  job "Build" (111577362329), PR #11 head 4c12640010ba794e35a88236f08d1bafc5f9c708
+#   artifact     : aether-engine-debug-4c12640010ba794e35a88236f08d1bafc5f9c708
+#   apk          : app-debug.apk, 2,416,748 bytes,
+#                  sha256 1938d026630aac913bbddf7e352aef26836a29c106e4ab3f956b3db0ea11c607
+#   library      : lib/arm64-v8a/libaether.so, 55,784 bytes (A1 build was 6,760 bytes with no .symtab)
+#   enabler      : debug-only packaging.jniLibs.keepDebugSymbols (D-C1.2) — docs/decisions/unstripped-debug.md
+
+$ unzip -o -q app-debug.apk 'lib/arm64-v8a/libaether.so' && ls -l lib/arm64-v8a/libaether.so
+-rw-r--r-- 1 root root 55784 Jan  1  1981 lib/arm64-v8a/libaether.so
 [exit=0]
 
-$ readelf -sW SO | grep -Ei n_ac|n_aior|n_awl|n_chl|n_djp|n_eio|n_i$|n_ic|n_ilil|n_jpo|n_update
-[exit=1]
-
-$ objdump -d --section=.text SO | grep -A1 <n_
-objdump: can't disassemble for architecture UNKNOWN!
-
-objdump: section '.text' mentioned in a -j option, but not found in any input file
-[exit=1]
-
-$ readelf -SW SO | grep -E symtab|strtab
-  [20] .shstrtab         STRTAB          0000000000000000 00144c 0000d6 00      0   0  1
+$ readelf -SW lib/arm64-v8a/libaether.so | grep -E 'symtab|strtab|text|dynsym'
+  [ 3] .dynsym           DYNSYM          00000000000002c0 0002c0 0000a8 18   A  7   1  8
+  [13] .text             PROGBITS        0000000000000c38 000c38 0003d4 00  AX  0   0  4
+  [26] .symtab           SYMTAB          0000000000000000 00c750 000678 18     28  63  8
+  [27] .shstrtab         STRTAB          0000000000000000 00cdc8 000135 00      0   0  1
+  [28] .strtab           STRTAB          0000000000000000 00cefd 0003ab 00      0   0  1
 [exit=0]
 
-$ readelf -sW SO FUNC symbol list
-0000000000000000 0 FUNC GLOBAL UND __cxa_finalize@LIBC
-0000000000000000 0 FUNC GLOBAL UND __cxa_atexit@LIBC
-0000000000000000 0 FUNC GLOBAL UND __register_atfork@LIBC
-0000000000000000 0 FUNC GLOBAL UND __android_log_print
-0000000000000000 0 FUNC GLOBAL UND __stack_chk_fail@LIBC
-0000000000000c98 648 FUNC GLOBAL 13 JNI_OnLoad
-[exit=0]
-
-$ nm -a SO | head -20
-nm: /tmp/so_ae/lib/arm64-v8a/libaether.so: no symbols
-[exit=0]
-
-# RESULT: UNABLE. 0 of 11 rows obtainable statically.
-# Reason A: libaether.so is stripped: readelf -SW shows no .symtab section (grep exit 1 above).
-# Reason B: local binutils objdump has no AArch64 backend (see objdump message above); aarch64-linux-gnu-objdump is NOT-FOUND.
-# The fnPtr table is a RUNTIME artifact: logcat line native[NN] name=... fnPtr=... with LOG_TAG AetherJNI. Deferred to Phase A2 (device required).
-$ readelf -sW SO | grep JNI_OnLoad  (only exported FUNC present)
+$ readelf -sW lib/arm64-v8a/libaether.so | grep -Ei 'kMethods|JNI_OnLoad'
+    25: 0000000000002088   264 OBJECT  LOCAL  DEFAULT   15 _ZL8kMethods
      6: 0000000000000c98   648 FUNC    GLOBAL DEFAULT   13 JNI_OnLoad
+    66: 0000000000000c98   648 FUNC    GLOBAL DEFAULT   13 JNI_OnLoad
 [exit=0]
+# 264 bytes = 11 x 24 (JNINativeMethod), section 15 = .data.rel.ro, at address 0x2088.
+
+# The 11 stubs are file-static C++ functions, so their .symtab names are mangled
+# (_ZL<n>n_<name>P...). The ordered command as written in D-A1.2 anchors the last alternative
+# with `n_i$`, which cannot match a mangled name, so it returns 10 rows:
+
+$ grep -Ei 'n_(ac|aior|awl|chl|djp|eio|i$|ic|ilil|jpo|update)' symbol_table.txt
+    26: 0000000000000f20    24 FUNC    LOCAL  DEFAULT   13 _ZL4n_acP7_JNIEnvP8_jobjectS2_S2_
+    27: 0000000000000f38    24 FUNC    LOCAL  DEFAULT   13 _ZL6n_aiorP7_JNIEnvP8_jobjectP8_jstringS4_
+    28: 0000000000000f50    24 FUNC    LOCAL  DEFAULT   13 _ZL5n_awlP7_JNIEnvP8_jobjectP8_jstring
+    29: 0000000000000f68     8 FUNC    LOCAL  DEFAULT   13 _ZL5n_chlP7_JNIEnvP8_jobjectP11_jbyteArray
+    30: 0000000000000f70    16 FUNC    LOCAL  DEFAULT   13 _ZL5n_djpP7_JNIEnvP8_jobjecti
+    31: 0000000000000f80    24 FUNC    LOCAL  DEFAULT   13 _ZL5n_eioP7_JNIEnvP8_jobject
+    33: 0000000000000fb0    24 FUNC    LOCAL  DEFAULT   13 _ZL4n_icP7_JNIEnvP8_jobjectS2_
+    34: 0000000000000fc8    20 FUNC    LOCAL  DEFAULT   13 _ZL6n_ililP7_JNIEnvP8_jobjecti
+    35: 0000000000000fdc    24 FUNC    LOCAL  DEFAULT   13 _ZL5n_jpoP7_JNIEnvP8_jobjectS2_S2_S2_
+    36: 0000000000000ff4    24 FUNC    LOCAL  DEFAULT   13 _ZL8n_updateP7_JNIEnvP8_jobjectS2_S2_
+[exit=0]  (10 rows — n_i missing only because of the `$` anchor; `_ZL2n_iP7_JNIEnvP8_jobjecti` is symbol 32)
+
+$ grep -Ei 'n_(ac|aior|awl|chl|djp|eio|i|ic|ilil|jpo|update)' symbol_table.txt
+    26: 0000000000000f20    24 FUNC    LOCAL  DEFAULT   13 _ZL4n_acP7_JNIEnvP8_jobjectS2_S2_
+    27: 0000000000000f38    24 FUNC    LOCAL  DEFAULT   13 _ZL6n_aiorP7_JNIEnvP8_jobjectP8_jstringS4_
+    28: 0000000000000f50    24 FUNC    LOCAL  DEFAULT   13 _ZL5n_awlP7_JNIEnvP8_jobjectP8_jstring
+    29: 0000000000000f68     8 FUNC    LOCAL  DEFAULT   13 _ZL5n_chlP7_JNIEnvP8_jobjectP11_jbyteArray
+    30: 0000000000000f70    16 FUNC    LOCAL  DEFAULT   13 _ZL5n_djpP7_JNIEnvP8_jobjecti
+    31: 0000000000000f80    24 FUNC    LOCAL  DEFAULT   13 _ZL5n_eioP7_JNIEnvP8_jobject
+    32: 0000000000000f98    24 FUNC    LOCAL  DEFAULT   13 _ZL3n_iP7_JNIEnvP8_jobjecti
+    33: 0000000000000fb0    24 FUNC    LOCAL  DEFAULT   13 _ZL4n_icP7_JNIEnvP8_jobjectS2_
+    34: 0000000000000fc8    20 FUNC    LOCAL  DEFAULT   13 _ZL6n_ililP7_JNIEnvP8_jobjecti
+    35: 0000000000000fdc    24 FUNC    LOCAL  DEFAULT   13 _ZL5n_jpoP7_JNIEnvP8_jobjectS2_S2_S2_
+    36: 0000000000000ff4    24 FUNC    LOCAL  DEFAULT   13 _ZL8n_updateP7_JNIEnvP8_jobjectS2_S2_
+[exit=0]  (11 rows — every stub address falls inside .text 0x0c38..0x100c)
+
+# The registered fnPtr values themselves: kMethods starts at 0x2088, JNINativeMethod is 24 bytes
+# (name, signature, fnPtr), so the fnPtr field of record i sits at 0x2088 + 24*i + 16 and each slot
+# carries one R_AARCH64_RELATIVE relocation whose addend is the stub address.
+
+$ readelf -rW lib/arm64-v8a/libaether.so | grep R_AARCH64_RELATIVE
+0000000000002080  0000000000000403 R_AARCH64_RELATIVE                        2080
+0000000000002088  0000000000000403 R_AARCH64_RELATIVE                        8d1
+0000000000002090  0000000000000403 R_AARCH64_RELATIVE                        99a
+0000000000002098  0000000000000403 R_AARCH64_RELATIVE                        f20
+00000000000020a0  0000000000000403 R_AARCH64_RELATIVE                        869
+00000000000020a8  0000000000000403 R_AARCH64_RELATIVE                        86f
+00000000000020b0  0000000000000403 R_AARCH64_RELATIVE                        f38
+00000000000020b8  0000000000000403 R_AARCH64_RELATIVE                        9c2
+00000000000020c0  0000000000000403 R_AARCH64_RELATIVE                        897
+00000000000020c8  0000000000000403 R_AARCH64_RELATIVE                        f50
+00000000000020d0  0000000000000403 R_AARCH64_RELATIVE                        8ad
+00000000000020d8  0000000000000403 R_AARCH64_RELATIVE                        828
+00000000000020e0  0000000000000403 R_AARCH64_RELATIVE                        f68
+00000000000020e8  0000000000000403 R_AARCH64_RELATIVE                        84c
+00000000000020f0  0000000000000403 R_AARCH64_RELATIVE                        832
+00000000000020f8  0000000000000403 R_AARCH64_RELATIVE                        f70
+0000000000002100  0000000000000403 R_AARCH64_RELATIVE                        9cd
+0000000000002108  0000000000000403 R_AARCH64_RELATIVE                        9d1
+0000000000002110  0000000000000403 R_AARCH64_RELATIVE                        f80
+0000000000002118  0000000000000403 R_AARCH64_RELATIVE                        929
+0000000000002120  0000000000000403 R_AARCH64_RELATIVE                        8d4
+0000000000002128  0000000000000403 R_AARCH64_RELATIVE                        f98
+0000000000002130  0000000000000403 R_AARCH64_RELATIVE                        849
+0000000000002138  0000000000000403 R_AARCH64_RELATIVE                        9d5
+0000000000002140  0000000000000403 R_AARCH64_RELATIVE                        fb0
+0000000000002148  0000000000000403 R_AARCH64_RELATIVE                        8b1
+0000000000002150  0000000000000403 R_AARCH64_RELATIVE                        913
+0000000000002158  0000000000000403 R_AARCH64_RELATIVE                        fc8
+0000000000002160  0000000000000403 R_AARCH64_RELATIVE                        82e
+0000000000002168  0000000000000403 R_AARCH64_RELATIVE                        8d9
+0000000000002170  0000000000000403 R_AARCH64_RELATIVE                        fdc
+0000000000002178  0000000000000403 R_AARCH64_RELATIVE                        9c6
+0000000000002180  0000000000000403 R_AARCH64_RELATIVE                        96a
+0000000000002188  0000000000000403 R_AARCH64_RELATIVE                        ff4
+0000000000002190  0000000000000403 R_AARCH64_RELATIVE                        c50
+0000000000002198  0000000000000403 R_AARCH64_RELATIVE                        c38
+[exit=0]
+# 0x2080 = __dso_handle (8 bytes) precedes kMethods; 0x2190/0x2198 are the two entries that follow the array.
+
+# FNPTR TABLE — 11 of 11 rows, kMethods order
+# idx | name   | fnPtr slot | fnPtr value | stub symbol (mangled)                              | symbol addr | section
+    00 | ac     | 0x2098     | 0xf20       | _ZL4n_acP7_JNIEnvP8_jobjectS2_S2_                  | 0xf20       | 13 .text
+    01 | aior   | 0x20b0     | 0xf38       | _ZL6n_aiorP7_JNIEnvP8_jobjectP8_jstringS4_         | 0xf38       | 13 .text
+    02 | awl    | 0x20c8     | 0xf50       | _ZL5n_awlP7_JNIEnvP8_jobjectP8_jstring             | 0xf50       | 13 .text
+    03 | chl    | 0x20e0     | 0xf68       | _ZL5n_chlP7_JNIEnvP8_jobjectP11_jbyteArray         | 0xf68       | 13 .text
+    04 | djp    | 0x20f8     | 0xf70       | _ZL5n_djpP7_JNIEnvP8_jobjecti                      | 0xf70       | 13 .text
+    05 | eio    | 0x2110     | 0xf80       | _ZL5n_eioP7_JNIEnvP8_jobject                       | 0xf80       | 13 .text
+    06 | i      | 0x2128     | 0xf98       | _ZL3n_iP7_JNIEnvP8_jobjecti                        | 0xf98       | 13 .text
+    07 | ic     | 0x2140     | 0xfb0       | _ZL4n_icP7_JNIEnvP8_jobjectS2_                     | 0xfb0       | 13 .text
+    08 | ilil   | 0x2158     | 0xfc8       | _ZL6n_ililP7_JNIEnvP8_jobjecti                     | 0xfc8       | 13 .text
+    09 | jpo    | 0x2170     | 0xfdc       | _ZL5n_jpoP7_JNIEnvP8_jobjectS2_S2_S2_              | 0xfdc       | 13 .text
+    10 | update | 0x2188     | 0xff4       | _ZL8n_updateP7_JNIEnvP8_jobjectS2_S2_              | 0xff4       | 13 .text
+# Every fnPtr value equals the address of the matching stub symbol. Section 13 .text carries 18 FUNC
+# symbols: the 11 stubs, 6 libc atexit/dlclose helpers (__on_dlclose 0xc38, __on_dlclose_late 0xc50,
+# __emutls_unregister_key 0xc48, __atexit_handler_wrapper 0xc58, atexit 0xc6c, pthread_atfork 0xc88),
+# and JNI_OnLoad 0xc98 — the only GLOBAL one (listed twice: .dynsym and .symtab).
+
+$ objdump -d --section=.text lib/arm64-v8a/libaether.so
+lib/arm64-v8a/libaether.so:     file format elf64-little
+objdump: can't disassemble for architecture UNKNOWN!
+[exit=1]
+# Local binutils has no AArch64 backend (llvm-objdump / llvm-objdump-17 / aarch64-linux-gnu-objdump /
+# gobjdump all NOT-FOUND, python capstone absent) and installing one is forbidden, so this command
+# cannot produce output on this host. The AArch64-capable equivalent runs in CI on the same library
+# with the NDK toolchain the Build job already installs. Raw runner output — run 37251631628, Build
+# job 111580289647, step "Native symbol diagnostic (D-C1.2 keepDebugSymbols verification)":
+#
+$ $ANDROID_HOME/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-objdump -d --section=.text lib/arm64-v8a/libaether.so
+$   | grep -A4 -E '<_ZL?[0-9]+n_(ac|aior|awl|chl|djp|eio|i|ic|ilil|jpo|update)P'
+0000000000000f20 <_ZL4n_acP7_JNIEnvP8_jobjectS2_S2_>:
+     f20: 90000001    adrp x1, 0x0 <runtime_init.cpp>
+     f24: 91231c21    add  x1, x1, #0x8c7
+     f28: 90000002    adrp x2, 0x0 <runtime_init.cpp>
+     f2c: 9122d842    add  x2, x2, #0x8b6
+--
+0000000000000f38 <_ZL6n_aiorP7_JNIEnvP8_jobjectP8_jstringS4_>:
+     f38: 90000001    adrp x1, 0x0 <runtime_init.cpp>
+     f3c: 91231c21    add  x1, x1, #0x8c7
+     f40: 90000002    adrp x2, 0x0 <runtime_init.cpp>
+     f44: 9122d842    add  x2, x2, #0x8b6
+--
+0000000000000f50 <_ZL5n_awlP7_JNIEnvP8_jobjectP8_jstring>:
+     f50: 90000001    adrp x1, 0x0 <runtime_init.cpp>
+     f54: 91231c21    add  x1, x1, #0x8c7
+     f58: 90000002    adrp x2, 0x0 <runtime_init.cpp>
+     f5c: 9122d842    add  x2, x2, #0x8b6
+--
+0000000000000f68 <_ZL5n_chlP7_JNIEnvP8_jobjectP11_jbyteArray>:
+     f68: 2a1f03e0    mov  w0, wzr
+     f6c: d65f03c0    ret
+
+0000000000000f70 <_ZL5n_djpP7_JNIEnvP8_jobjecti>:
+     f70: f9400008    ldr  x8, [x0]
+     f74: 2a1f03e1    mov  w1, wzr
+     f78: f942c102    ldr  x2, [x8, #0x580]
+     f7c: d61f0040    br   x2
+--
+0000000000000f80 <_ZL5n_eioP7_JNIEnvP8_jobject>:
+     f80: 90000001    adrp x1, 0x0 <runtime_init.cpp>
+     f84: 91231c21    add  x1, x1, #0x8c7
+     f88: 90000002    adrp x2, 0x0 <runtime_init.cpp>
+     f8c: 9122d842    add  x2, x2, #0x8b6
+--
+0000000000000f98 <_ZL3n_iP7_JNIEnvP8_jobjecti>:
+     f98: 90000001    adrp x1, 0x0 <runtime_init.cpp>
+     f9c: 91231c21    add  x1, x1, #0x8c7
+     fa0: 90000002    adrp x2, 0x0 <runtime_init.cpp>
+     fa4: 9122d842    add  x2, x2, #0x8b6
+--
+0000000000000fb0 <_ZL4n_icP7_JNIEnvP8_jobjectS2_>:
+     fb0: 90000001    adrp x1, 0x0 <runtime_init.cpp>
+     fb4: 91231c21    add  x1, x1, #0x8c7
+     fb8: 90000002    adrp x2, 0x0 <runtime_init.cpp>
+     fbc: 9122d842    add  x2, x2, #0x8b6
+--
+0000000000000fc8 <_ZL6n_ililP7_JNIEnvP8_jobjecti>:
+     fc8: f9400008    ldr  x8, [x0]
+     fcc: 90000001    adrp x1, 0x0 <runtime_init.cpp>
+     fd0: 9121b821    add  x1, x1, #0x86e
+     fd4: f9429d02    ldr  x2, [x8, #0x538]
+--
+0000000000000fdc <_ZL5n_jpoP7_JNIEnvP8_jobjectS2_S2_S2_>:
+     fdc: 90000001    adrp x1, 0x0 <runtime_init.cpp>
+     fe0: 91231c21    add  x1, x1, #0x8c7
+     fe4: 90000002    adrp x2, 0x0 <runtime_init.cpp>
+     fe8: 9122d842    add  x2, x2, #0x8b6
+--
+0000000000000ff4 <_ZL8n_updateP7_JNIEnvP8_jobjectS2_S2_>:
+     ff4: 90000001    adrp x1, 0x0 <runtime_init.cpp>
+     ff8: 91231c21    add  x1, x1, #0x8c7
+     ffc: 90000002    adrp x2, 0x0 <runtime_init.cpp>
+    1000: 9122d842    add  x2, x2, #0x8b6
+[exit=0]
+# Disassembly addresses match the static table above 1:1 (0xf20, 0xf38, 0xf50, 0xf68, 0xf70, 0xf80,
+# 0xf98, 0xfb0, 0xfc8, 0xfdc, 0xff4), and the stub bodies are the expected log-and-tail-call
+# (n_ac/n_aior/n_awl/n_eio/n_i/n_ic/n_jpo/n_update) and return/VM-call shapes.
+
+# RESULT: D-A1.2 is CLOSED statically. 11 of 11 rows obtainable (address + registered fnPtr value).
+# The earlier UNABLE record was caused by the stripped library, not by the analysis commands; the
+# debug-only keepDebugSymbols fix (D-C1.2) restores .symtab in the debug artifact only.
+# Remaining A2 item: on-device confirmation that the runtime logcat values
+# (AetherJNI: native[NN] name=... fnPtr=0x...) match these static addresses (docs/phase-a2-plan.md).

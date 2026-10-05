@@ -1,6 +1,6 @@
 # Phase 2 plan (stub — outline only)
 
-Phase 2 remains closed until Phase A1 and A2 close. This file records scope only; **no Phase 2 work is executed** by this or any step of the A1.5 round.
+**Phase 2 opens after A2 closes.** Phase 2 remains closed until Phase A1 and A2 close. This file records scope only; **no Phase 2 work is executed** by this or any step of the A1.5 round.
 
 ## Scope outline
 
