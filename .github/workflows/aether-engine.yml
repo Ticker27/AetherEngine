@@ -77,6 +77,45 @@ jobs:
           fi
           echo "OK: libaether.so present, arm64-v8a only"
 
+      - name: Native symbol diagnostic (D-C1.2 keepDebugSymbols verification)
+        shell: bash
+        run: |
+          set -uo pipefail
+          APK=aether-engine/app/build/outputs/apk/debug/app-debug.apk
+          rm -rf /tmp/libaether
+          mkdir -p /tmp/libaether
+          unzip -o -q "$APK" 'lib/arm64-v8a/libaether.so' -d /tmp/libaether || true
+          SO=/tmp/libaether/lib/arm64-v8a/libaether.so
+          if [ ! -f "$SO" ]; then
+            echo "== RESULT: INCONCLUSIVE, lib/arm64-v8a/libaether.so not found in the APK =="
+            echo "== diagnostic done =="
+            exit 0
+          fi
+          echo "== packaged libaether.so: $(stat -c%s "$SO") bytes =="
+          echo "== sections: symtab / dynsym / text / data.rel.ro =="
+          readelf -SW "$SO" | grep -E '\.symtab|\.dynsym|\.text|data\.rel\.ro' || true
+          if readelf -SW "$SO" | grep -q '\.symtab'; then
+            echo "== RESULT: .symtab PRESENT (keepDebugSymbols effective) =="
+            echo "== readelf -sW: kMethods + JNI_OnLoad + the 11 stubs (static C++, so mangled _ZL<n>n_<name>P...) =="
+            readelf -sW "$SO" | grep -Ei 'kMethods|JNI_OnLoad|_ZL?[0-9]+n_(ac|aior|awl|chl|djp|eio|i|ic|ilil|jpo|update)P' || true
+            echo "== readelf -rW: R_AARCH64_RELATIVE (the kMethods fnPtr slots hold the stub addresses) =="
+            readelf -rW "$SO" | grep -E 'R_AARCH64_RELATIVE' || true
+            OBJDUMP="$ANDROID_HOME/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-objdump"
+            if [ -x "$OBJDUMP" ]; then
+              echo "== NDK llvm-objdump -d --section=.text (AArch64-capable stand-in for objdump) =="
+              "$OBJDUMP" -d --section=.text "$SO" | grep -A4 -E '<_ZL?[0-9]+n_(ac|aior|awl|chl|djp|eio|i|ic|ilil|jpo|update)P' || true
+            else
+              echo "== NDK llvm-objdump not present at $OBJDUMP =="
+            fi
+          else
+            echo "== RESULT: .symtab ABSENT despite keepDebugSymbols (root-cause diagnostic) =="
+            echo "== pre-packaging CMake outputs =="
+            find aether-engine/app/build/intermediates/cxx -name 'libaether.so' -print 2>/dev/null || true
+            echo "== merge/strip JNI lib intermediates =="
+            find aether-engine/app/build/intermediates -name 'libaether.so' -print 2>/dev/null || true
+          fi
+          echo "== diagnostic done =="
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -231,6 +270,17 @@ jobs:
           labels = re.findall(r"name:\s*([\w-]+)-apks-\$\{\{ github\.sha \}\}", ci_txt)
           chk(modules == [":android-host"] and labels == ["android-host"],
               f"CI artifact label matches settings.gradle.kts module (modules={modules}, labels={labels})")
+
+          # 8b) D-C1.6 regression guards: the stale label must never come back, and the
+          # unstripped-debug fix must stay scoped to the debug variant.
+          ae_txt = open(".github/workflows/aether-engine.yml").read()
+          stale = "aether" + "-host-apks"   # split so this guard does not match its own literal
+          chk(stale not in ci_txt and stale not in ae_txt,
+              f"no stale {stale} artifact label in any workflow (D-C1.6)")
+          chk('variant.packaging.jniLibs.keepDebugSymbols.add("**/libaether.so")' in ag
+              and 'withBuildType("debug")' in ag
+              and re.search(r"buildTypes\s*\{[^}]*packaging", ag) is None,
+              "keepDebugSymbols is variant-scoped to debug (D-C1.2), never buildTypes-scoped")
 
           print("\nRESULT:", "ALL CHECKS PASSED" if not fail else f"{len(fail)} FAILURES: {fail}")
           sys.exit(1 if fail else 0)
