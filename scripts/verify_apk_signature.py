@@ -17,7 +17,11 @@ def fail(message: str) -> None:
 
 
 def find_apksigner() -> Path | str:
-    configured_home = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
+    configured_home = (
+        os.environ.get("ANDROID_HOME")
+        or os.environ.get("ANDROID_SDK_ROOT")
+        or "/usr/local/lib/android/sdk"
+    )
     if configured_home:
         candidates = sorted(Path(configured_home).glob("build-tools/*/apksigner"), reverse=True)
         if candidates:

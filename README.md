@@ -67,11 +67,11 @@ The `main` CI build and tag release workflow expose only one APK artifact:
 aether-engine-release.apk
 ```
 
-The pipeline assembles the host release variant with the signing keystore materialized from the
-protected `production` GitHub Actions environment. Gradle applies the release signing config with
-Android APK Signature Scheme **v1 and v2** explicitly enabled and v3/v4 disabled; the resulting
-APK is verified with `apksigner`, then host/native/Flutter checks run and only the signed APK is
-uploaded. The unsigned intermediate is never uploaded or published. There is no debug, fixture,
+The pipeline assembles the host release variant, materializes the signing keystore from the
+protected `production` GitHub Actions environment, then runs `zipalign` and `apksigner` directly
+with Android APK Signature Scheme **v1 and v2** enabled and v3/v4 disabled. The resulting APK is
+verified with `apksigner`, then host/native/Flutter checks run and only the signed APK is uploaded.
+The unsigned intermediate is never uploaded or published. There is no debug, fixture,
 instrumentation, or unsigned release artifact in the release output.
 
 The signing secrets are `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`,
