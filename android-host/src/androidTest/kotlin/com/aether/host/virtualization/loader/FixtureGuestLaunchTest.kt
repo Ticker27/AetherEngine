@@ -44,7 +44,8 @@ class FixtureGuestLaunchTest {
 
     @After
     fun tearDown() {
-        instrumentation.runOnMainSync { host.fixtureController.shutdown() }
+        // reset(), not shutdown(): shutdown is final and would block every later test in this process.
+        instrumentation.runOnMainSync { host.fixtureController.reset() }
         flagger.setEnabled(HostFeature.DYNAMIC_APK_LOADING, false)
         flagger.setEnabled(HostFeature.COOPERATIVE_FIXTURE_UI, false)
     }

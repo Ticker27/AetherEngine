@@ -113,11 +113,21 @@ class CooperativeFixtureController {
         releaseAcquired(current)
     }
 
-    /** Process-level shutdown: revokes and closes whatever session exists. */
+    /** Process-level shutdown: revokes and closes whatever session exists. Final for this instance. */
     fun shutdown() {
         mainThread()
         stopping = true
         session?.let(::releaseAcquired)
+    }
+
+    /**
+     * Closes any session and clears the stopped state so the controller can serve a new session.
+     * Intended for tests and for an explicit host restart; production shutdown uses [shutdown].
+     */
+    fun reset() {
+        mainThread()
+        session?.let(::releaseAcquired)
+        stopping = false
     }
 
     private fun recreate(current: Session, entry: GuestEntryPoint) {
