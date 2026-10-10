@@ -41,7 +41,7 @@ def main() -> None:
     apksigner = find_apksigner()
     try:
         result = subprocess.run(
-            [str(apksigner), "verify", "--verbose", str(apk)],
+            [str(apksigner), "verify", "--verbose", "--min-sdk-version", "1", str(apk)],
             check=True,
             capture_output=True,
             text=True,
