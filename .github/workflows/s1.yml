@@ -218,7 +218,7 @@ jobs:
           trap finish EXIT
           # Use AGP's real connected-test XML reporter with already packaged APKs.
           # Excluded package tasks remove assembly dependencies from this invocation.
-          bash ./gradlew -PaetherTestAbi="$TEST_ABI" :android-host:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class="$classes" --stacktrace --console=plain 2>&1 | tee evidence/logs/scoped-connected-tests.log
+          bash ./gradlew -PaetherFixtureKeystore="$AETHER_FIXTURE_KEYSTORE" -PaetherTestAbi="$TEST_ABI" :android-host:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class="$classes" --stacktrace --console=plain 2>&1 | tee evidence/logs/scoped-connected-tests.log
           SCRIPT
 
       - name: Execute Loader (+ Launch when present) on x86_64 API34
