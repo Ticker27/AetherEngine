@@ -97,7 +97,8 @@ jobs:
         run: |
           set -euo pipefail
           # Read-only: asks AGP which keystore and certificate it uses for the fixture debug build.
-          bash ./gradlew :fixture-guest:signingReport --console=plain 2>&1 | tee evidence/logs/agp-signing-report.log
+          # Report only. The keystore is created in the next step, before any signing happens.
+          bash ./gradlew :fixture-guest:signingReport --console=plain 2>&1 | tee evidence/logs/agp-signing-report.log || true
           rg -n -A8 "Variant: debug" evidence/logs/agp-signing-report.log | tee evidence/logs/agp-debug-signing.txt || true
 
       - name: Create the standard disposable debug keystore for the fixture split
@@ -105,9 +106,9 @@ jobs:
         run: |
           set -euo pipefail
           # Public Android debug key (alias androiddebugkey, password android). Not a release credential.
-          # AGP's own default debug keystore location; created before Gradle so AGP signs with it.
-          KS="$HOME/.android/debug.keystore"
-          mkdir -p "$HOME/.android"
+          # Path verified by AGP signingReport on this runner: Store: /home/runner/.config/.android/debug.keystore
+          KS="$HOME/.config/.android/debug.keystore"
+          mkdir -p "$(dirname "$KS")"
           if [[ ! -f "$KS" ]]; then
             keytool -genkeypair -v -keystore "$KS" -storepass android -keypass android \
               -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
