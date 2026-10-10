@@ -28,7 +28,9 @@ val createFixtureConfig by tasks.registering(Exec::class) {
     outputs.file(configSplitDir.map { it.file("fixture-signer.sha256") })
     inputs.file(rootProject.file("tools/create_fixture_config_split.py"))
     inputs.file(fixtureApk)
-    inputs.file(fixtureDebugKeystore)
+    // AGP creates the debug keystore while signing the fixture, so it may not exist at
+    // configuration time on a fresh runner. Mark it optional; doFirst verifies it at execution.
+    inputs.file(fixtureDebugKeystore).optional(true)
     inputs.property("buildToolsVersion", android.buildToolsVersion ?: "36.0.0")
     doFirst {
         val keystore = fixtureDebugKeystore.get()
