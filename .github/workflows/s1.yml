@@ -1,0 +1,271 @@
+name: S1 Fixture Evidence (not release or ARM64 acceptance)
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_emulator:
+        description: Run scoped tests on x86_64 API34 (never ARM64 evidence)
+        type: boolean
+        default: true
+      test_abi:
+        description: Debug-only native ABI; arm64-v8a requires run_emulator=false
+        type: choice
+        options: [x86_64, arm64-v8a]
+        default: x86_64
+      upload_debug_apks:
+        description: Upload first-party debug host/test/fixture for authorized device tests
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: s1-evidence-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  evidence:
+    name: S1 debug evidence / ARM64 device acceptance NOT RUN
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      TEST_ABI: ${{ inputs.test_abi }}
+      RUN_EMULATOR: ${{ inputs.run_emulator }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Initialize evidence and validate dispatch inputs
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/logs evidence/manifests
+          python3 - <<'PY'
+          import json, os, pathlib
+          metadata = {
+              'commit': os.environ['GITHUB_SHA'], 'run_id': os.environ['GITHUB_RUN_ID'],
+              'runner_arch': os.environ['RUNNER_ARCH'], 'test_abi': os.environ['TEST_ABI'],
+              'run_emulator': os.environ['RUN_EMULATOR'] == 'true',
+              'device_scope': 'x86_64 API34 only' if os.environ['RUN_EMULATOR'] == 'true' else 'artifact-only; no device tests',
+              'arm64_result': 'NOT_RUN', 's1_complete': False,
+          }
+          pathlib.Path('evidence/run-context.json').write_text(json.dumps(metadata, indent=2) + '\n')
+          PY
+          [[ "$RUNNER_ARCH" == X64 ]]
+          if [[ "$RUN_EMULATOR" == true && "$TEST_ABI" != x86_64 ]]; then
+            echo '::error::ARM64 dispatch must set run_emulator=false; this emulator is x86_64 only.'
+            exit 1
+          fi
+          python3 -B -m unittest discover -s tools -p test_verify_s1_artifacts.py -v 2>&1 | tee evidence/logs/inspector-unit-tests.log
+          python3 -B tools/verify_s1_artifacts.py scope --output evidence/test-scope.json > evidence/test-classes.txt
+
+      - name: Set up JDK17 (same release toolchain)
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Flutter3.47.0 (same release toolchain)
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.0'
+          cache: true
+
+      - name: Resolve Flutter module dependencies and SDK paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd flutter-app && flutter pub get) 2>&1 | tee evidence/logs/flutter-pub-get.log
+          printf 'flutter.sdk=%s\nsdk.dir=%s\n' "$FLUTTER_ROOT" "$ANDROID_HOME" > local.properties
+
+      - name: Set up Android36 / build tools36 / NDK26.3 / CMake3.22.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "$SDKM" --install 'platforms;android-36' 'build-tools;36.0.0' 'ndk;26.3.11579264' 'cmake;3.22.1' 'platform-tools' 2>&1 | tee evidence/logs/sdk-setup.log
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264" >> "$GITHUB_ENV"
+          { java -version; flutter --version; "$SDKM" --list_installed; } > evidence/logs/toolchain.txt 2>&1
+
+      - name: Assemble ONCE and run host debug UNIT tests
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash ./gradlew -PaetherTestAbi="$TEST_ABI" :fixture-guest:assembleDebug :android-host:assembleDebug :android-host:assembleDebugAndroidTest :android-host:testDebugUnitTest --stacktrace --console=plain 2>&1 | tee evidence/logs/build-and-unit-tests.log
+
+      - name: Inspect actual APK candidates and save SHA256/member evidence
+        id: apks
+        if: ${{ always() && steps.prepare.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B tools/verify_s1_artifacts.py apks --abi "$TEST_ABI" --output evidence/apk-evidence.json --copy-to evidence/debug-apks 2>&1 | tee evidence/logs/apk-inspection.log
+          for role in host test fixture config; do
+            apk="evidence/debug-apks/$role-debug.apk"
+            [[ "$role" != config ]] || apk=evidence/debug-apks/fixture-config-arm64.apk
+            "$ANDROID_HOME/build-tools/36.0.0/aapt2" dump badging "$apk" > "evidence/manifests/$role-badging.txt"
+            "$ANDROID_HOME/build-tools/36.0.0/aapt2" dump xmltree "$apk" --file AndroidManifest.xml > "evidence/manifests/$role-AndroidManifest.xmltree.txt"
+            "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$apk" > "evidence/manifests/$role-signature.txt"
+          done
+          python3 -B - <<'PY'
+          import json, pathlib, re
+          pin = json.loads(pathlib.Path('evidence/apk-evidence.json').read_text())['fixture_signer_sha256']
+          for role in ('fixture', 'config'):
+              text = pathlib.Path(f'evidence/manifests/{role}-signature.txt').read_text()
+              certs = re.findall(r'Signer #\d+ certificate SHA-256 digest: ([0-9a-f]{64})', text)
+              assert certs == [pin], f'{role}: verified signing certificate must equal public fixture pin'
+          PY
+
+      - name: Required host unit-test XML gate (>0 tests, zero failures/errors)
+        id: unit_xml
+        if: ${{ always() && steps.prepare.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B tools/verify_s1_artifacts.py xml --root android-host/build/test-results/testDebugUnitTest --output evidence/unit-xml-evidence.json 2>&1 | tee evidence/logs/unit-xml-gate.log
+
+      - name: Enable KVM for x86_64 emulator only
+        if: ${{ inputs.run_emulator }}
+        run: sudo chmod 666 /dev/kvm
+
+      - name: Prepare scoped emulator command (no reassembly)
+        if: ${{ inputs.run_emulator }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > evidence/run-emulator.sh <<'SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          classes="$(cat evidence/test-classes.txt)"
+          {
+            printf 'scope=x86_64 API34 emulator; ARM64 acceptance NOT_RUN\n'
+            printf 'selected_debug_abi=%s\n' "$TEST_ABI"
+            adb shell getprop ro.build.version.sdk
+            adb shell getprop ro.product.cpu.abi
+            adb shell getprop ro.product.cpu.abilist
+            adb shell getprop ro.dalvik.vm.native.bridge
+          } > evidence/device-before.txt 2>&1
+          [[ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" == 34 ]]
+          [[ "$(adb shell getprop ro.product.cpu.abi | tr -d '\r')" == x86_64 ]]
+          adb logcat -c
+          # Only app/runner/fixture tags, not full device logcat or private storage.
+          adb logcat -v threadtime AetherApplication:V HostInitializer:V AetherS1:V S1Evidence:V FixtureGuestLoaderTest:V FixtureGuestLaunchTest:V FixtureActivity:V FixtureGuest:V TestRunner:V AndroidJUnitRunner:V AndroidRuntime:E '*:S' > evidence/scoped-logcat.txt 2>&1 &
+          log_pid=$!
+          # Sample only the host process while instrumentation is alive.
+          # readlink can be denied by SELinux; retain that denial, never infer bitness.
+          (
+            set +e
+            while :; do
+              host_pids="$(adb shell pidof com.aether.host 2>/dev/null | tr -d '\r')"
+              if [[ -n "$host_pids" ]]; then
+                for host_pid in $host_pids; do
+                  printf 'host_pid=%s selected_native_abi=%s\n' "$host_pid" "$TEST_ABI"
+                  adb shell run-as com.aether.host readlink "/proc/$host_pid/exe"
+                done
+                break
+              fi
+              sleep 1
+            done
+          ) > evidence/host-process-executable.txt 2>&1 &
+          abi_pid=$!
+          finish() {
+            rc=$?
+            trap - EXIT
+            kill "$log_pid" "$abi_pid" 2>/dev/null || true
+            wait "$log_pid" 2>/dev/null || true
+            wait "$abi_pid" 2>/dev/null || true
+            {
+              printf 'Package ABI is recorded below; it is not an in-process ARM64 measurement.\n'
+              adb shell dumpsys package com.aether.host | rg 'Package \[|primaryCpuAbi=|secondaryCpuAbi=|nativeLibraryDir=|versionName=|versionCode='
+              printf '\nhost pid (may exit when instrumentation finishes):\n'
+              adb shell pidof com.aether.host || true
+            } > evidence/process-abi.txt 2>&1 || true
+            # Preserve direct nativeReady/process-ABI log statements; absence is not success.
+            rg -i 'nativeReady|processAbi|is64Bit|Host ready:|native runtime|native library|abi=' evidence/scoped-logcat.txt > evidence/nativeReady-process-abi.txt || printf 'No nativeReady/process ABI statement observed; do not infer READY.\n' > evidence/nativeReady-process-abi.txt
+            printf '%s\n' "$rc" > evidence/emulator-command-exit.txt
+            exit "$rc"
+          }
+          trap finish EXIT
+          # Use AGP's real connected-test XML reporter with already packaged APKs.
+          # Excluded package tasks remove assembly dependencies from this invocation.
+          bash ./gradlew -PaetherTestAbi="$TEST_ABI" :android-host:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class="$classes" --stacktrace --console=plain 2>&1 | tee evidence/logs/scoped-connected-tests.log
+          SCRIPT
+
+      - name: Execute Loader (+ Launch when present) on x86_64 API34
+        id: emulator
+        if: ${{ inputs.run_emulator }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash evidence/run-emulator.sh
+
+      - name: Required scoped instrumentation XML gate
+        if: ${{ always() && inputs.run_emulator && steps.prepare.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B tools/verify_s1_artifacts.py xml --root android-host/build/outputs/androidTest-results/connected --scope evidence/test-scope.json --min-tests 4 --output evidence/instrumentation-xml-evidence.json 2>&1 | tee evidence/logs/instrumentation-xml-gate.log
+
+      - name: Assert inspected APK bytes were not rebuilt/replaced
+        if: ${{ always() && steps.apks.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B - <<'PY' 2>&1 | tee evidence/logs/apk-identity-after-tests.log
+          import json, pathlib, sys
+          sys.path.insert(0, 'tools')
+          from verify_s1_artifacts import file_sha256
+          report = json.loads(pathlib.Path('evidence/apk-evidence.json').read_text())
+          for candidate in report['candidates'] + [report['config_split']]:
+              path = pathlib.Path(candidate['path'])
+              assert file_sha256(path) == candidate['sha256'], f'APK changed after inspection: {path}'
+              print(f'unchanged {candidate["sha256"]} {path}')
+          PY
+
+      - name: State evidence boundary (NOT S1 completion)
+        if: ${{ always() && steps.prepare.outcome == 'success' }}
+        shell: bash
+        run: |
+          {
+            echo '## S1 evidence boundary'
+            echo "Debug ABI: $TEST_ABI; emulator requested: $RUN_EMULATOR."
+            echo 'ARM64 device result: **NOT RUN**. S1 complete: **false**.'
+            echo 'Artifact inspection/unit-test success is not physical-device acceptance.'
+            echo 'When requested, API34 x86_64 results are emulator-only evidence.'
+            echo 'Use required XML gates and command exit codes, not a green summary alone.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve evidence even after build/test failure
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: s1-evidence-${{ inputs.test_abi }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            evidence/
+            !evidence/debug-apks/**
+            android-host/build/test-results/testDebugUnitTest/
+            android-host/build/reports/tests/testDebugUnitTest/
+            android-host/build/outputs/androidTest-results/connected/
+            android-host/build/reports/androidTests/connected/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Optional first-party debug APKs for authorized device testing
+        if: ${{ always() && inputs.upload_debug_apks && steps.apks.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: s1-debug-apks-${{ inputs.test_abi }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/debug-apks/
+          if-no-files-found: error
+          retention-days: 14
