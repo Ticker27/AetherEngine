@@ -5,6 +5,7 @@ import java.util.concurrent.ConcurrentHashMap
 /** Host-only features. A flag is a rollout switch, not a security boundary. */
 enum class HostFeature {
     DYNAMIC_APK_LOADING,
+    COOPERATIVE_FIXTURE_UI,
     PROXY_VPN_SERVICE,
     INTERNAL_WEB_BROWSER,
 }

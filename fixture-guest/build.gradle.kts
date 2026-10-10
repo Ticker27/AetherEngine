@@ -2,6 +2,11 @@ plugins {
     id("com.android.application")
 }
 
+// Host owns the API classes; the fixture references them without bundling a second copy.
+dependencies {
+    compileOnly(project(":guest-api"))
+}
+
 android {
     namespace = "com.aether.fixture"
     compileSdk = 36

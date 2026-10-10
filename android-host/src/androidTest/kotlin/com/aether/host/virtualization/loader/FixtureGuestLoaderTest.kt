@@ -38,13 +38,13 @@ class FixtureGuestLoaderTest {
                 PackageManager.GET_SERVICES or PackageManager.GET_RECEIVERS,
         ) ?: error("fixture APK metadata could not be read")
         val signerPins = fixtureSignerPins(packageInfo)
-        assertTrue("fixture must have a readable signer", signerPins.isNotEmpty())
+        assertEquals(expectedSignerPins(), signerPins)
         val policy = GuestApkTrustPolicy(
             profile = GuestApkTrustProfile(
                 packageName = "com.aether.fixture",
                 versionName = "1.0.0",
                 versionCode = 1L,
-                trustedSignerSha256 = signerPins,
+                trustedSignerSha256 = expectedSignerPins(),
             ),
         )
 
@@ -62,6 +62,11 @@ class FixtureGuestLoaderTest {
         assertNotNull(loaded.classLoader.loadClass("com.aether.fixture.FixtureActivity"))
         assertNotNull(loaded.classLoader.loadClass("com.aether.fixture.FixtureService"))
         assertNotNull(loaded.classLoader.loadClass("com.aether.fixture.FixtureReceiver"))
+        org.junit.Assert.assertSame(android.app.Activity::class.java,
+            loaded.classLoader.loadClass("android.app.Activity"))
+        org.junit.Assert.assertThrows(ClassNotFoundException::class.java) {
+            loaded.classLoader.loadClass("androidx.core.content.ContextCompat")
+        }
         assertTrue("guest VFS root must exist", loaded.fileSystem.exists(""))
 
         val activity = packageInfo.activities.orEmpty().single()
@@ -105,6 +110,44 @@ class FixtureGuestLoaderTest {
         } catch (error: GuestApkLoadException) {
             assertTrue(error.message.orEmpty().contains("trust", ignoreCase = true))
         }
+    }
+
+    @Test
+    fun realCodeFreeConfigSplitIsValidatedAndPartitionsThePackageSet() {
+        val base = copyFixtureToPrivateStorage()
+        val split = File(context.cacheDir, "fixture-config-arm64.apk")
+        testAssetContext.assets.open("fixture-config-arm64.apk").use { input ->
+            split.outputStream().use { input.copyTo(it) }
+        }
+        @Suppress("DEPRECATION")
+        val flags = if (android.os.Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES
+            else PackageManager.GET_SIGNATURES
+        val info = checkNotNull(context.packageManager.getPackageArchiveInfo(base.path, flags))
+        assertEquals(expectedSignerPins(), fixtureSignerPins(info))
+        val policy = GuestApkTrustPolicy(GuestApkTrustProfile("com.aether.fixture", "1.0.0", 1L, expectedSignerPins()))
+        val loader = DynamicApkLoader(context, policy)
+        val single = loader.load(base)
+        val withSplit = loader.load(GuestApkSet(base, listOf(GuestApkSplit("config.arm64_v8a", split))))
+        assertEquals(single.apkSha256, withSplit.apkSha256)
+        assertTrue(single.packageSetSha256 != withSplit.packageSetSha256)
+        assertEquals("config.arm64_v8a", withSplit.splitApks.single().name)
+        assertFalse(withSplit.splitApks.single().apkFile.canWrite())
+        assertSameLoader(withSplit)
+        val cached = loader.load(GuestApkSet(base, listOf(GuestApkSplit("config.arm64_v8a", split))))
+        org.junit.Assert.assertSame(withSplit, cached)
+        single.fileSystem.openOutput("base-only.txt").use { it.write(1) }
+        assertFalse(withSplit.fileSystem.exists("base-only.txt"))
+        org.junit.Assert.assertThrows(GuestApkLoadException::class.java) {
+            loader.load(GuestApkSet(base, listOf(GuestApkSplit("config.wrong", split))))
+        }
+    }
+
+    private fun expectedSignerPins(): Set<String> = testAssetContext.assets.open("fixture-signer.sha256")
+        .bufferedReader().use { reader -> setOf(reader.readText().trim()) }
+
+    private fun assertSameLoader(loaded: LoadedGuestApk) {
+        org.junit.Assert.assertSame(loaded.classLoader,
+            loaded.classLoader.loadClass("com.aether.fixture.FixtureEntryPoint").classLoader)
     }
 
     private fun copyFixtureToPrivateStorage(): File {

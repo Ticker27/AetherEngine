@@ -19,6 +19,8 @@ class GuestClassLoaderProxyTest {
             "kotlin.Unit",
             "kotlinx.coroutines.Job",
             "com.aether.host.bridge.Native",
+            "com.aether.guest.api.GuestEntryPoint",
+            "com.aether.guest.api.GuestStorage",
         ).forEach { className ->
             assertTrue(className, GuestClassLoaderProxy.isParentFirstForTests(className))
         }

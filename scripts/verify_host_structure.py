@@ -242,7 +242,7 @@ def main() -> None:
     settings_gradle = (ROOT / "settings.gradle.kts").read_text()
     flutter_pubspec = (ROOT / "flutter-app/pubspec.yaml").read_text()
     static_modules = re.findall(r'(?m)^include\("(:[\w-]+)"\)$', settings_gradle)
-    if static_modules != [":android-host", ":fixture-guest"]:
+    if static_modules != [":android-host", ":fixture-guest", ":guest-api"]:
         fail(f"root Android modules are not canonical: {static_modules}")
     if (ROOT / "aether-engine").exists() or (ROOT / ".github/workflows/aether-engine.yml").exists():
         fail("legacy nested Android project or workflow is still present")

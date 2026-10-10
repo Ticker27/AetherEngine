@@ -3,6 +3,7 @@ package com.aether.host
 import android.app.Application
 import android.util.Log
 import com.aether.host.bootstrap.HostInitializer
+import com.aether.host.runtime.AetherRuntime
 
 /** Android process owner for the virtualization host. */
 class AetherApplication : Application() {
@@ -17,7 +18,7 @@ class AetherApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "Aether host process started: pid=${android.os.Process.myPid()}")
-        if (!hostInitializer.initialize()) {
+        if (!AetherRuntime.bootstrap(this)) {
             Log.e(TAG, "Host started in degraded mode; native runtime is unavailable")
         }
     }
@@ -27,7 +28,7 @@ class AetherApplication : Application() {
 
     override fun onTerminate() {
         try {
-            initializer?.shutdown()
+            AetherRuntime.shutdown()
         } catch (error: Exception) {
             Log.e(TAG, "Host shutdown failed", error)
         } finally {

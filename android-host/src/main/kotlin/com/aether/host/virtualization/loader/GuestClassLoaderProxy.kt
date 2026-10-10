@@ -4,8 +4,8 @@ import dalvik.system.DexClassLoader
 
 /**
  * Class-loader policy for the verified guest DEX path. Framework and Aether API classes are
- * always shared from the host; other classes resolve from the guest APK first, then fall back
- * to the host for explicitly shared dependencies. No hidden-API reflection or native-library
+ * always shared from the host; other classes must resolve from the verified guest APK.
+ * Missing guest dependencies never silently bind unrelated host classes. No hidden-API reflection or native-library
  * search path is enabled.
  *
  * This does not attach Android components or resources. A guest Activity still cannot be
@@ -33,16 +33,7 @@ class GuestClassLoaderProxy internal constructor(
             loaded
         }
 
-    private fun loadGuestFirst(name: String): Class<*> = try {
-        findClass(name)
-    } catch (guestMissing: ClassNotFoundException) {
-        try {
-            hostParent.loadClass(name)
-        } catch (hostMissing: ClassNotFoundException) {
-            hostMissing.addSuppressed(guestMissing)
-            throw hostMissing
-        }
-    }
+    private fun loadGuestFirst(name: String): Class<*> = findClass(name)
 
     private fun isHostOwnedClass(name: String): Boolean =
         PARENT_FIRST_PREFIXES.any { prefix -> name.startsWith(prefix) }
@@ -61,6 +52,7 @@ class GuestClassLoaderProxy internal constructor(
             "kotlin.",
             "kotlinx.",
             "com.aether.host.",
+            "com.aether.guest.api.",
         )
 
         /** Exposed to unit tests so delegation policy cannot silently drift. */
