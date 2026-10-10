@@ -92,12 +92,27 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264" >> "$GITHUB_ENV"
           { java -version; flutter --version; "$SDKM" --list_installed; } > evidence/logs/toolchain.txt 2>&1
 
+      - name: Create the standard disposable debug keystore for the fixture split
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Public Android debug key (alias androiddebugkey, password android). Not a release credential.
+          # AGP's own default debug keystore location; created before Gradle so AGP signs with it.
+          KS="$HOME/.android/debug.keystore"
+          mkdir -p "$HOME/.android"
+          if [[ ! -f "$KS" ]]; then
+            keytool -genkeypair -v -keystore "$KS" -storepass android -keypass android \
+              -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname 'CN=Android Debug,O=Android,C=US' 2>&1 | tee evidence/logs/fixture-keystore.log
+          fi
+          echo "AETHER_FIXTURE_KEYSTORE=$KS" >> "$GITHUB_ENV"
+
       - name: Assemble ONCE and run host debug UNIT tests
         id: build
         shell: bash
         run: |
           set -euo pipefail
-          bash ./gradlew -PaetherTestAbi="$TEST_ABI" :fixture-guest:assembleDebug :android-host:assembleDebug :android-host:assembleDebugAndroidTest :android-host:testDebugUnitTest --stacktrace --console=plain 2>&1 | tee evidence/logs/build-and-unit-tests.log
+          bash ./gradlew -PaetherFixtureKeystore="$AETHER_FIXTURE_KEYSTORE" -PaetherTestAbi="$TEST_ABI" :fixture-guest:assembleDebug :android-host:assembleDebug :android-host:assembleDebugAndroidTest :android-host:testDebugUnitTest --stacktrace --console=plain 2>&1 | tee evidence/logs/build-and-unit-tests.log
 
       - name: Inspect actual APK candidates and save SHA256/member evidence
         id: apks

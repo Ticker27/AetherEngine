@@ -22,6 +22,7 @@ val configSplitDir = layout.buildDirectory.dir("generated/fixtureSplit")
 // AGP creates this keystore while signing the fixture. It may not exist at configuration time on a
 // fresh runner, so it is NOT declared as a file input (Gradle would reject it). The fixture APK is
 // a declared input and embeds its signing certificate, so any keystore change still re-runs the task.
+// Same key path as fixture-guest's explicit debug signingConfig (single source: -PaetherFixtureKeystore).
 val fixtureDebugKeystorePath = providers.gradleProperty("aetherFixtureKeystore")
     .orElse(providers.provider { "${System.getProperty("user.home")}/.android/debug.keystore" })
 val createFixtureConfig by tasks.registering(Exec::class) {
