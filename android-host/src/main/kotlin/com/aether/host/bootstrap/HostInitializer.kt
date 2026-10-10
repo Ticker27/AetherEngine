@@ -5,9 +5,14 @@ import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import com.aether.host.bridge.Native
+import com.aether.host.BuildConfig
+import com.aether.host.target.TargetApkContract
+import com.aether.host.virtualization.activity.CooperativeFixtureController
+import com.aether.host.virtualization.activity.ProxyActivityP0
 import com.aether.host.virtualization.flags.HostFeature
 import com.aether.host.virtualization.flags.flagger
 import com.aether.host.virtualization.loader.DynamicApkLoader
+import com.aether.host.virtualization.loader.GuestApkSet
 import com.aether.host.virtualization.loader.GuestApkTrustPolicy
 import com.aether.host.virtualization.loader.LoadedGuestApk
 import java.io.File
@@ -57,6 +62,8 @@ class HostInitializer(application: Application) : HostRuntimeInitializer {
     private val appContext = application.applicationContext
     private val listeners = CopyOnWriteArraySet<HostComponentListener>()
     private val activitySlots = VirtualActivitySlotRegistry()
+    private val guestLoaders = mutableMapOf<String, DynamicApkLoader>()
+    val fixtureController = CooperativeFixtureController()
 
     @Volatile
     var state: HostInitializerState = HostInitializerState.NEW
@@ -101,15 +108,58 @@ class HostInitializer(application: Application) : HostRuntimeInitializer {
      * Loads the selected 8 Ball Pool 56.31.0 APK only when the process-local feature switch
      * is enabled and explicit signer pins are supplied. Call on a worker thread.
      */
+    fun loadTargetApk(apkFile: File, trustPolicy: GuestApkTrustPolicy): LoadedGuestApk =
+        loadTargetApk(GuestApkSet(apkFile), trustPolicy)
+
+    /** Package-set loading is not an arbitrary Android Activity launch capability. */
     @Synchronized
-    fun loadTargetApk(apkFile: File, trustPolicy: GuestApkTrustPolicy): LoadedGuestApk {
+    fun loadTargetApk(apkSet: GuestApkSet, trustPolicy: GuestApkTrustPolicy): LoadedGuestApk {
         check(state == HostInitializerState.READY) { "Host must be initialized before loading a guest" }
         check(flagger.isEnabled(HostFeature.DYNAMIC_APK_LOADING)) {
             "Dynamic APK loading is disabled"
         }
 
-        // The policy fixes package/version and requires explicit signer pins for this target.
-        val guest = DynamicApkLoader(appContext, trustPolicy).load(apkFile)
+        require(trustPolicy.expectedPackageName == TargetApkContract.PACKAGE_NAME &&
+            trustPolicy.expectedVersionName == TargetApkContract.VERSION_NAME &&
+            trustPolicy.expectedVersionCode == TargetApkContract.VERSION_CODE) {
+            "Target route requires the exact target trust profile"
+        }
+        return loadGuest(apkSet, trustPolicy)
+    }
+
+    /** Debug-only first-party loader route; no arbitrary app or native Activity attachment. */
+    @Synchronized
+    fun loadCooperativeFixtureApk(apkFile: File, policy: GuestApkTrustPolicy): LoadedGuestApk {
+        check(BuildConfig.DEBUG) { "Fixture UI is unavailable in release builds" }
+        check(state == HostInitializerState.READY) { "Host native bootstrap must be ready" }
+        check(flagger.isEnabled(HostFeature.DYNAMIC_APK_LOADING)) { "Dynamic APK loading is disabled" }
+        require(policy.expectedPackageName == "com.aether.fixture" &&
+            policy.expectedVersionName == "1.0.0" && policy.expectedVersionCode == 1L) {
+            "Fixture route requires its explicit first-party profile"
+        }
+        return loadGuest(GuestApkSet(apkFile), policy)
+    }
+
+    /** Called on main after a verified fixture was loaded on a worker. */
+    @Synchronized
+    fun prepareFixtureLaunch(guest: LoadedGuestApk): Intent {
+        check(BuildConfig.DEBUG && flagger.isEnabled(HostFeature.COOPERATIVE_FIXTURE_UI)) {
+            "Cooperative fixture UI is disabled"
+        }
+        check(state == HostInitializerState.READY && loadedGuest === guest) { "Guest session is not ready" }
+        val token = fixtureController.prepare(guest)
+        return Intent(appContext, ProxyActivityP0::class.java)
+            .putExtra(CooperativeFixtureController.EXTRA_TOKEN, token)
+    }
+
+    private fun loadGuest(apkSet: GuestApkSet, policy: GuestApkTrustPolicy): LoadedGuestApk {
+        check(android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) { "Guest APK IO requires a worker thread" }
+        check(!fixtureController.isLeased()) { "Cannot replace a guest while a proxy lease is active" }
+        val key = listOf(policy.expectedPackageName, policy.expectedVersionName,
+            policy.expectedVersionCode.toString(), policy.trustedSignerSha256.sorted().joinToString(","))
+            .joinToString("|")
+        val loader = guestLoaders.getOrPut(key) { DynamicApkLoader(appContext, policy) }
+        val guest = loader.load(apkSet)
         loadedGuest = guest
         dispatch(
             HostComponentEvent(
@@ -165,7 +215,17 @@ class HostInitializer(application: Application) : HostRuntimeInitializer {
                 ),
             )
         }
+        // Revoke synchronously so no new guest callback or acquisition can start, even before the
+        // posted teardown below runs on main.
+        fixtureController.revoke()
+        val cleanup = Runnable {
+            runCatching { fixtureController.shutdown() }
+                .onFailure { Log.e(TAG, "Fixture cleanup failed after lease revocation", it) }
+        }
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) cleanup.run()
+        else android.os.Handler(android.os.Looper.getMainLooper()).post(cleanup)
         loadedGuest = null
+        guestLoaders.clear()
         activitySlots.clear()
 
         try {
