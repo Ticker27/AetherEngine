@@ -17,12 +17,9 @@ val fixtureApk = project(":fixture-guest").layout.buildDirectory.file(
 )
 val stagedFixtureApkDir = layout.buildDirectory.dir("generated/androidTestAssets").get().asFile
 val configSplitDir = layout.buildDirectory.dir("generated/fixtureSplit")
-// AGP's disposable debug signing config is generated at this path by the fixture build.
-// CI may override it when the runner uses a non-default Gradle user home.
-// AGP creates this keystore while signing the fixture. It may not exist at configuration time on a
-// fresh runner, so it is NOT declared as a file input (Gradle would reject it). The fixture APK is
-// a declared input and embeds its signing certificate, so any keystore change still re-runs the task.
-// Same key path as fixture-guest's explicit debug signingConfig (single source: -PaetherFixtureKeystore).
+// The split is signed with the SAME certificate as the fixture APK. The signer is read from the
+// fixture APK by the script; the keystore is only the key store to sign with (-PaetherFixtureKeystore).
+// The keystore may be absent at configuration time, so it is resolved at execution, not declared as input.
 val fixtureDebugKeystorePath = providers.gradleProperty("aetherFixtureKeystore")
     .orElse(providers.provider { "${System.getProperty("user.home")}/.android/debug.keystore" })
 val createFixtureConfig by tasks.registering(Exec::class) {
@@ -36,11 +33,12 @@ val createFixtureConfig by tasks.registering(Exec::class) {
     doFirst {
         val keystore = file(fixtureDebugKeystorePath.get())
         check(keystore.isFile) {
-            "Fixture debug keystore is missing: ${keystore.absolutePath}; assemble fixture first or set -PaetherFixtureKeystore"
+            "Fixture debug keystore is missing: ${keystore.absolutePath}; set -PaetherFixtureKeystore"
         }
         commandLine("python3", rootProject.file("tools/create_fixture_config_split.py").absolutePath,
             "--sdk", android.sdkDirectory.absolutePath,
             "--keystore", keystore.absolutePath,
+            "--fixture-apk", fixtureApk.get().asFile.absolutePath,
             "--output-dir", configSplitDir.get().asFile.absolutePath)
     }
 }

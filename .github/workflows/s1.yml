@@ -107,17 +107,6 @@ jobs:
           fi
           echo "AETHER_FIXTURE_KEYSTORE=$KS" >> "$GITHUB_ENV"
 
-      - name: Diagnose which debug keystore AGP signs the fixture with
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Read-only diagnosis: list debug keystores AGP could use, with their certificate digests.
-          { echo "candidates:"; find "$HOME" /root /tmp "$RUNNER_TEMP" -maxdepth 4 -name 'debug.keystore' 2>/dev/null || true; } | tee evidence/logs/keystore-candidates.txt
-          while read -r ks; do
-            [[ -f "$ks" ]] || continue
-            echo "== $ks"; keytool -list -v -keystore "$ks" -storepass android -alias androiddebugkey 2>/dev/null | rg 'SHA256:' || echo "unreadable with android/androiddebugkey"
-          done < <(rg -o '/[^ ]*debug\.keystore' evidence/logs/keystore-candidates.txt | sort -u) | tee evidence/logs/keystore-digests.txt
-
       - name: Assemble ONCE and run host debug UNIT tests
         id: build
         shell: bash
