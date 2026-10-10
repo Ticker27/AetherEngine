@@ -188,6 +188,20 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
 
+      - name: Inspect instrumentation APK assets
+        run: |
+          set -euo pipefail
+          apk=$(find android-host/build/outputs/apk/androidTest -name '*-debugAndroidTest.apk' | head -n 1)
+          echo "test_apk=$apk"
+          unzip -l "$apk" | tee /tmp/test-apk-listing.txt
+          if unzip -l "$apk" | grep -q 'assets/fixture-guest.apk'; then
+            echo 'FIXTURE_ASSET=present'
+          else
+            echo 'FIXTURE_ASSET=missing'
+            ls -la android-host/build/generated/androidTestAssets/ || echo 'staged_dir_empty_or_absent'
+            exit 1
+          fi
+
       - name: Run S1 instrumentation on x86_64 emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
