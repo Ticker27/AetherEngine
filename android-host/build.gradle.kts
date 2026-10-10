@@ -6,7 +6,7 @@ plugins {
 val fixtureApk = project(":fixture-guest").layout.buildDirectory.file(
     "outputs/apk/debug/fixture-guest-debug.apk",
 )
-val stagedFixtureApkDir = layout.buildDirectory.dir("generated/androidTestAssets")
+val stagedFixtureApkDir = layout.buildDirectory.dir("generated/androidTestAssets").get().asFile
 val stageFixtureApk by tasks.registering(Copy::class) {
     dependsOn(project(":fixture-guest").tasks.named("assembleDebug"))
     from(fixtureApk)
@@ -69,7 +69,7 @@ android {
         }
         getByName("androidTest") {
             kotlin.srcDirs("src/androidTest/kotlin")
-            assets.srcDir(stageFixtureApk.map { it.destinationDir })
+            assets.srcDir(stagedFixtureApkDir)
         }
     }
 
@@ -91,6 +91,14 @@ android {
     }
 }
 
+
+// Order the staged fixture copy before the androidTest asset merge. Use the lazy named
+// lookup only after AGP has created the task, so configuration does not depend on its name.
+tasks.configureEach {
+    if (name == "mergeDebugAndroidTestAssets") {
+        dependsOn(stageFixtureApk)
+    }
+}
 
 kotlin {
     compilerOptions {
