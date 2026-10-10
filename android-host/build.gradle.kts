@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -24,7 +26,7 @@ val releaseKeystoreFile = layout.buildDirectory.file("signing/release.p12").get(
 if (releaseSigningConfigured) {
     releaseKeystoreFile.parentFile.mkdirs()
     releaseKeystoreFile.writeBytes(
-        java.util.Base64.getDecoder().decode(releaseKeystoreBase64!!),
+        Base64.getDecoder().decode(releaseKeystoreBase64!!),
     )
 }
 
