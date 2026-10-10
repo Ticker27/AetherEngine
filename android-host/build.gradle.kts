@@ -7,6 +7,7 @@ val fixtureApk = project(":fixture-guest").layout.buildDirectory.file(
     "outputs/apk/debug/fixture-guest-debug.apk",
 )
 val stagedFixtureApk = layout.buildDirectory.dir("generated/androidTestAssets")
+val stagedFixtureApkDir = file("$buildDir/generated/androidTestAssets")
 val stageFixtureApk by tasks.registering(Copy::class) {
     dependsOn(project(":fixture-guest").tasks.named("assembleDebug"))
     from(fixtureApk)
@@ -69,7 +70,7 @@ android {
         }
         getByName("androidTest") {
             kotlin.srcDirs("src/androidTest/kotlin")
-            assets.srcDir(stagedFixtureApk)
+            assets.srcDir(stagedFixtureApkDir)
         }
     }
 
