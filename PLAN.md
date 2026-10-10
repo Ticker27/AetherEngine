@@ -1,96 +1,103 @@
-# AetherEngine Plan
+# AetherEngine delivery plan
 
-Status: **active reset** · 2026-10-04 · supersedes the removed `docs/` specification set.
+Status: **S1 implementation in progress** · 2026-10-10
 
-## Why the reset
+## Canonical source of truth
 
-The project had stalled behind documents and imported payloads: every meaningful test path
-depended on the external 8 Ball Pool APK plus a device, signer authorization, and an
-out-of-band download, while ~890 files of opaque reference data and tens of megabytes of
-binary analysis dumps sat in the repository without a single code path using them.
+The root Gradle project is the only active Android project:
 
-Two rules apply from now on:
+- `android-host` is the host application and owns the proxy component pools.
+- `fixture-guest` is the first-party guest APK used by S1 tests.
+- `aether-native` is the host native runtime.
+- `flutter-app` is the Flutter add-to-app module.
+- `scripts/check_local.sh` and GitHub Actions are the verification entry points.
 
-1. **No milestone lands without a check that runs.** Every step below ends with a command
-   that passes locally (`sh scripts/check_local.sh`) or in CI.
-2. **No binary or imported payload is committed** unless a test in this repository loads it.
+The former nested Android project and its separate CI contract are not part of the active
+architecture. Historical phase notes are not acceptance criteria for the current plan.
 
-## Teardown record (landed with this plan)
+## Invariants
 
-| Removed | Why |
-| --- | --- |
-| `android-host/src/main/assets/snake/` (856 files) | Opaque imported data; no Kotlin or Dart code loaded it. |
-| `scripts/verify_snake_payload.py` | Existed only to police those files. |
-| `docs/` reference dumps and specs (32 files, ~43 MB) | Removed with this reset; contracts folded into this plan and the README. |
-| Snake references in host source comments | The reference bundle is no longer in the repository. |
+1. Every milestone ends with a check that runs.
+2. No external target APK or opaque imported payload is committed.
+3. The external target trust contract stays separate from first-party test fixtures.
+4. No milestone claims sandboxing: guest code shares the host process, UID, and permissions.
+5. S1 does not instantiate or launch guest Android components.
 
-Kept: the host container code base, the native lane, the pinned target policy and its security
-stance, and the CI build/test/release workflows.
+## Baseline already present
 
-## What exists today (verified by `sh scripts/check_local.sh`)
+- Host Flutter UI communicates over `MethodChannel("aether/runtime")`.
+- Native runtime state machine, dispatcher, JSON bridge, and JNI lane have host-side checks.
+- `DynamicApkLoader` copies a selected APK into private storage, verifies identity and signer,
+  re-verifies the immutable digest cache, creates a guest-first `DexClassLoader`, and creates a
+  digest-specific `GuestVirtualFileSystem` root.
+- Proxy Activity, Service, Receiver, Provider, lifecycle, flag, and filesystem foundations exist.
 
-- Kotlin host: `HostInitializer`, `VirtualActivity` P0..P3 proxy pools + slot registry,
-  `DynamicApkLoader` (copy → pinned identity + signer verification → read-only private cache →
-  re-verify → `DexClassLoader`), `GuestClassLoaderProxy`, `GuestVirtualFileSystem`.
-- Native lane: runtime state machine, thread dispatcher, JSON message bridge, 4-method JNI
-  contract in `libaether.so`; host-side tests pass without an Android toolchain.
-- Flutter add-to-app module wired over `MethodChannel("aether/runtime")`.
-- CI: build + unit tests + APK binary verification + Flutter analyze/test; `v*` tags publish
-  APKs to a GitHub Release.
+## S1 — First-party fixture guest
 
-## Not implemented (unchanged, deliberate)
+**Goal:** make the real loader path testable without an external APK or device-only payload.
 
-- Guest `Application`/`Activity` attachment, guest resources, package-manager behavior.
-- Guest native-library loading, multi-process isolation, hidden-API bypass, signature or
-  permission spoofing, package-manager spoofing, anti-cheat or licensing bypass.
-- Loaded guest code shares the host UID and permissions; none of this is a sandbox.
+### Delivered design
 
-## Milestones
+`fixture-guest` is a small Android application with deterministic identity:
 
-Each milestone must land with its check green.
+- package `com.aether.fixture`;
+- version `1.0.0`, code `1`;
+- launcher `FixtureActivity`;
+- private `FixtureService`;
+- private `FixtureReceiver`;
+- one string resource and `assets/fixture.txt`;
+- the build's debug signing certificate is read into a fixture-only trust profile during the
+  instrumentation run; no signing credential is committed.
 
-### S1 — First-party fixture guest (next)
+`GuestApkTrustPolicy` now accepts a generic `GuestApkTrustProfile`; its default constructor still
+represents only the pinned external target. The fixture does not alter `TargetApkContract`.
 
-The container cannot be developed against an APK that CI must not hold. Add a first-party
-fixture: a tiny Gradle Android module (one launcher Activity, one string, one asset, one
-service, one receiver) built by CI, plus a fixture trust profile in `GuestApkTrustPolicy`
-(test-only signer pin) so tests exercise the real loader path instead of mocking it.
+### S1 acceptance criteria
 
-**Check:** fixture APK assembles in CI, and JVM tests install it through `DynamicApkLoader`
-(copy, verify, DEX class loading, VFS root creation).
+1. `:fixture-guest:assembleDebug` produces the fixture APK.
+2. The source verifier checks the fixture identity, manifest components, asset, signing setup,
+   and host/fixture separation.
+3. The fixture APK is staged as a generated Android-test asset; no APK is committed.
+4. JVM tests continue to cover policy, class delegation, filesystem, and host logic.
+5. The Android instrumentation test loads the generated fixture with `DynamicApkLoader`.
+6. The test verifies package, version, observed signer through an explicit fixture profile,
+   digest-named private cache, and re-load
+   cache reuse.
+7. The test loads the fixture Application and Activity/Service/Receiver DEX classes.
+8. The test verifies a per-digest guest VFS root exists.
+9. The test rejects the same APK when the signer pin is wrong.
+10. The fixture is not included in the host release APK.
 
-### S2 — Guest package model (parse, persist, resolve)
+### Current gate state
 
-Manifest parsing into a `GuestPackage` model, deterministic JSON persistence under the guest
-VFS root, launcher resolution (`MAIN`+`LAUNCHER`, `INFO` fallback), and component lookup.
+- Local structure/native gate: green when run with `TMPDIR=/tmp`.
+- CI fixture assembly, static APK verification, and Android-test APK assembly: wired in `ci.yml`.
+- ARM64 connected instrumentation run: **pending device/runner**.
+- S1 is not marked complete until the instrumentation result is recorded on an ARM64 target.
 
-**Check:** parse → persist → reload determinism tests in `:android-host:test` against the
-fixture.
+## S2 — Guest package model
 
-### S3 — Install and launch the fixture in a proxy slot
+After S1 is green, parse the verified fixture manifest into an immutable `GuestPackage`, persist it
+as deterministic JSON below the guest VFS root, reload it, resolve `MAIN` + `LAUNCHER` (with
+`INFO` fallback), and provide component lookup. No external APK is required.
 
-`GuestRuntimeAdapter`: construct the fixture `Application` through the guest class loader,
-attach its launcher Activity into a booked `ProxyActivityP0..P3` slot, forward lifecycle
-events through the existing relay, release on destroy. Gated behind `flagger`
-(`GUEST_CONTAINER`, default off).
+## S3 — Install and launch fixture in a proxy slot
 
-**Check:** on-device run showing the fixture Activity inside the proxy slot with lifecycle
-events relayed; a scripted manual protocol covers environments without instrumentation CI.
+Implement a feature-flagged `GuestRuntimeAdapter` that constructs the fixture Application through
+the guest classloader, attaches its launcher Activity to an existing proxy slot, forwards lifecycle
+callbacks, and releases the slot on destroy. Default remains off.
 
-### S4 — Guest context and resources for the fixture
+## S4 — Guest context and resources
 
-`GuestContext`/`GuestResources` (assets, strings, theme) using public APIs only; if only a
-degraded path is possible, document the fallback instead of reaching for hidden APIs.
+Implement public-API `GuestContext`/`GuestResources` for the fixture's string, asset, and theme.
+Document any degraded path; do not use hidden APIs.
 
-**Check:** fixture string, asset, and theme attribute resolve through the guest context.
+## S5 — Component dispatch
 
-### S5 — Component dispatch (service, receiver, provider)
+Dispatch the fixture Service, Receiver, and later Provider through the existing proxy pools using
+the parsed manifest model.
 
-Manifest-driven dispatch into the existing proxy pools, exercised by the fixture.
+## External target later
 
-**Check:** one round-trip per component family in the instrumented suite.
-
-### Later — the external target
-
-Only after S3–S5: a manual, on-device validation protocol for the pinned 8 Ball Pool release
-(out-of-band APK, signer pins, and authorization required). Never a CI dependency.
+Only after S3–S5: perform a manual, on-device validation protocol for the separately authorized
+8 Ball Pool release. It remains out-of-band and never becomes a CI dependency.

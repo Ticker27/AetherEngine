@@ -13,7 +13,9 @@ command -v "$CXX" >/dev/null 2>&1 || {
     exit 1
 }
 
-OUT="$(mktemp -d)"
+TEMP_ROOT="${TMPDIR:-/tmp}"
+[ -d "$TEMP_ROOT" ] || TEMP_ROOT=/tmp
+OUT="$(mktemp -d "$TEMP_ROOT/aether-native.XXXXXX")"
 trap 'rm -rf "$OUT"' EXIT INT TERM
 
 INCLUDES="-I aether-native/src/main/cpp -I integration-test/native/compat"

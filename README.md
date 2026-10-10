@@ -1,91 +1,88 @@
 # AetherEngine
 
-A regular, installable Android host application that embeds a Flutter/Dart UI beside a custom
-native runtime (`libaether.so`) and an in-process virtualization-container foundation.
+AetherEngine is a regular, installable Android host that embeds a Flutter UI beside a custom
+native runtime and a deliberately limited in-process guest-code loader.
 
-**What works today**
+## Canonical structure
 
-- The host APK builds, installs, and runs through Android's normal app model; root is not required.
-- The Dart app talks to the custom native runtime over `MethodChannel("aether/runtime")`
-  (`version`, `state`, `initialize`, `shutdown`, `ping`), and the native lane (runtime state
-  machine, task dispatcher, JSON message bridge) passes host-side tests on any machine.
-- The guest loader verifies a pinned APK identity plus explicit signer pins, copies the APK to
-  app-private read-only storage, re-verifies it, then creates a guest-first `DexClassLoader`
-  and a per-digest `GuestVirtualFileSystem` root.
+```text
+android-host/       # the only host application and proxy component pool
+fixture-guest/      # first-party Android guest used by S1 CI/instrumentation tests
+aether-native/      # native runtime used by android-host
+flutter-app/        # Flutter add-to-app module
+integration-test/   # host-side native tests
+scripts/            # repository and artifact verifiers
+```
 
-**What does not work yet**
+The root Gradle project is the only Android build. The fixture is never bundled into the host
+release APK and is not an external target.
 
-- Loading is not a sandbox and does not install or launch another app's Android components.
-  Guest code shares the host UID and permissions; guest `Application`/`Activity`, resources,
-  native libraries, and package-manager behavior are not virtualized. The milestone plan is
-  [PLAN.md](PLAN.md).
+## Current status
 
-## Verify it locally
+- Host Flutter/native channel: implemented and covered by existing checks.
+- Guest APK verification, private cache, guest-first DEX loader, and per-digest VFS: implemented.
+- **S1 first-party fixture guest: implementation in progress on `main`; CI/device gates pending.**
+- Guest Application/Activity attachment, resources, package model, and component dispatch: not
+  implemented yet; they belong to S2–S5.
+
+S1 deliberately loads code and creates private storage only. It does not instantiate or launch
+the fixture's Activity, Service, or Receiver.
+
+## S1 fixture
+
+`fixture-guest` builds `com.aether.fixture` version `1.0.0` with:
+
+- one exported launcher Activity;
+- one private Service;
+- one private BroadcastReceiver;
+- one string resource and one deterministic asset;
+- the build's debug signer is checked by the instrumentation run.
+
+The host's generic `GuestApkTrustPolicy` accepts an explicit `GuestApkTrustProfile`. The external
+8 Ball Pool contract remains separate and unchanged. The Android instrumentation test stages the
+CI-built fixture APK, reads its signer metadata into a fixture-only profile, verifies its
+package/version/signer, loads its Activity/Service/Receiver classes through `DynamicApkLoader`,
+checks the private digest cache, and checks the VFS root.
+
+The fixture uses the build's debug signer. Its certificate is read into a fixture-only trust
+profile during the instrumentation run; no private key or release credential is committed. This
+trust profile is test plumbing, not a production trust anchor or isolation boundary.
+
+## Local checks
+
+The lightweight check does not need Android SDK, JDK, Flutter, or a device:
 
 ```sh
-sh scripts/check_local.sh
+TMPDIR=/tmp sh scripts/check_local.sh
 ```
 
-Runs the repository structure verifier and the host-side native suite (runtime-state machine,
-thread dispatcher, and message-bridge smoke demo). No Android SDK, JDK, or Flutter needed.
+The environment used by Minis may expose a non-existent `TMPDIR`; setting it to `/tmp` is
+required there. The check runs the source-structure verifier and host-side native tests.
 
-The Android and Flutter layers are checked by CI (`.github/workflows/ci.yml`): Gradle unit
-tests, `flutter analyze` / `flutter test`, debug/release APK assembly, and binary verification
-of the packaged artifacts (`scripts/verify_apk_architecture.py`).
+## Full CI checks
 
-## Repository layout
-
-```text
-android-host/                  # Kotlin host module (manifest, sources, resources)
-aether-native/src/main/cpp/    # C++ sources for libaether.so
-flutter-app/                   # Flutter add-to-app module (Dart UI, channels, services)
-integration-test/              # host-side native tests + Android/Flutter contract tests
-scripts/                       # verifiers + local check runner
-PLAN.md                        # teardown record + milestones
-.github/workflows/             # ci.yml (build/test), release.yml (v* tag releases)
-```
-
-Host source map (`android-host/src/main/kotlin/com/aether/host/`):
-
-```text
-AetherApplication.kt / MainActivity.kt   # Android process + FlutterActivity entry
-bootstrap/                               # HostInitializer, slot registry, lifecycle relay
-bridge/                                  # Native JNI facade + MethodChannel handler
-runtime/                                 # AetherRuntime bootstrap + HostLifecycle
-target/TargetApkContract.kt              # pinned external guest identity
-virtualization/                          # loader, filesystem, activity, components, flags, util, web
-```
-
-## Target guest policy
-
-The trust policy accepts only 8 Ball Pool `com.miniclip.eightballpool` version `56.30.0`
-(version code `4028`) with explicitly configured SHA-256 signer pins; a package/version match
-alone is insufficient. The target APK is never committed to Git (`local/` is ignored), and the
-loader does not launch it. Hidden-API bypass, signature/permission spoofing, package-manager
-spoofing, and anti-cheat or licensing bypass are intentionally not implemented. Loaded guest
-code runs with the host UID and permissions: this is not isolation.
-
-## Build and test (full toolchain)
-
-Requirements: JDK 17+, Flutter 3.47.0, Android SDK API 36, Android NDK 26.3.11579264, CMake 3.22.1.
+GitHub Actions runs the full environment-dependent build:
 
 ```sh
 cd flutter-app && flutter pub get && cd ..
-./gradlew :android-host:assembleDebug :android-host:assembleRelease :android-host:test
-python3 scripts/verify_apk_architecture.py android-host/build/outputs/apk/debug/android-host-debug.apk debug
-python3 scripts/verify_apk_architecture.py android-host/build/outputs/apk/release/android-host-release-unsigned.apk release
+./gradlew :fixture-guest:assembleDebug \
+  :android-host:assembleDebug \
+  :android-host:assembleRelease \
+  :android-host:assembleDebugAndroidTest \
+  :android-host:test
 ```
 
-Flutter module checks:
+The real `DynamicApkLoader` test is under `android-host/src/androidTest` and requires an ARM64
+Android device/emulator because the host is currently arm64-only. Until such a device job is
+available, normal CI assembles the instrumentation APK and validates the fixture statically;
+that is not claimed as a completed on-device S1 result.
 
-```sh
-cd flutter-app && flutter analyze && flutter test
-```
+## Security boundary
 
-Supported ABI: `arm64-v8a`; minimum Android API 24 (Android 7.0).
+The loader is not a sandbox. Guest code shares the host process, UID, and permissions. No hidden
+API bypass, signature spoofing, package-manager spoofing, anti-cheat bypass, licensing bypass,
+external endpoint, or imported target APK is part of this repository.
 
-## Release
-
-Pushing a `v*` tag runs `.github/workflows/release.yml`: it re-runs the checks above and
-publishes the debug and release APKs plus a `SHA256SUMS.txt` checksum file to a GitHub Release.
-The release APK from this build is unsigned and must be signed before distribution.
+The external target policy remains fixed to 8 Ball Pool `com.miniclip.eightballpool`, version
+`56.30.0` / code `4028`, with explicit signer pins supplied out-of-band. The target APK is not
+committed and is not a CI dependency.

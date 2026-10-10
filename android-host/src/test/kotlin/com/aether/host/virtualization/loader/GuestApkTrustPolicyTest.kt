@@ -28,6 +28,26 @@ class GuestApkTrustPolicyTest {
     }
 
     @Test
+    fun `accepts a separate first party fixture profile`() {
+        val fixtureCertificate = "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+        val policy = GuestApkTrustPolicy(
+            GuestApkTrustProfile(
+                packageName = "com.aether.fixture",
+                versionName = "1.0.0",
+                versionCode = 1L,
+                trustedSignerSha256 = setOf(fixtureCertificate),
+            ),
+        )
+
+        assertEquals(
+            setOf(fixtureCertificate),
+            policy.verify("com.aether.fixture", "1.0.0", 1L, setOf(fixtureCertificate)),
+        )
+        assertEquals("com.aether.fixture", policy.expectedPackageName)
+        assertEquals(TargetApkContract.PACKAGE_NAME, GuestApkTrustPolicy(setOf(CERTIFICATE)).expectedPackageName)
+    }
+
+    @Test
     fun `rejects package mismatch`() {
         assertThrows(UntrustedGuestApkException::class.java) {
             policy().verify(

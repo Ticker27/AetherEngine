@@ -56,11 +56,14 @@ jobs:
       - name: Verify repository structure
         run: python3 scripts/verify_host_structure.py
 
-      - name: Assemble debug and release APKs
-        run: ./gradlew :android-host:assembleDebug :android-host:assembleRelease --stacktrace --console=plain
+      - name: Assemble canonical host, fixture, and test APKs
+        run: ./gradlew :fixture-guest:assembleDebug :android-host:assembleDebug :android-host:assembleRelease :android-host:assembleDebugAndroidTest --stacktrace --console=plain
 
       - name: Run Android host unit tests
         run: ./gradlew :android-host:test --stacktrace
+
+      - name: Verify generated S1 fixture APK
+        run: python3 scripts/verify_fixture_apk.py fixture-guest/build/outputs/apk/debug/fixture-guest-debug.apk
 
       - name: Run native test suite (host-side)
         run: sh scripts/native_tests.sh

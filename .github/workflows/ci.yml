@@ -82,11 +82,13 @@ jobs:
       - name: Make Gradle executable
         run: chmod +x ./gradlew
 
-      - name: Assemble debug APK
+      - name: Assemble fixture, host, and instrumentation APKs
         shell: bash
         run: |
           set -o pipefail
-          ./gradlew :android-host:assembleDebug --stacktrace --console=plain 2>&1 | tee /tmp/assemble-debug.log || {
+          ./gradlew :fixture-guest:assembleDebug :android-host:assembleDebug \
+            :android-host:assembleRelease :android-host:assembleDebugAndroidTest \
+            --stacktrace --console=plain 2>&1 | tee /tmp/assemble-debug.log || {
             tail -n 60 /tmp/assemble-debug.log
             diagnostics="$(grep -iE '(^e:|error|failed|conflict|manifest merger|aapt|uses-sdk|suggestion|what went wrong|execution failed)' /tmp/assemble-debug.log | tail -n 40 || true)"
             if [[ -z "$diagnostics" ]]; then diagnostics="$(tail -n 20 /tmp/assemble-debug.log)"; fi
@@ -95,21 +97,11 @@ jobs:
             exit 1
           }
 
-      - name: Assemble release APK
-        shell: bash
-        run: |
-          set -o pipefail
-          ./gradlew :android-host:assembleRelease --stacktrace --console=plain 2>&1 | tee /tmp/assemble-release.log || {
-            tail -n 60 /tmp/assemble-release.log
-            diagnostics="$(grep -iE '(^e:|error|failed|conflict|manifest merger|aapt|uses-sdk|suggestion|what went wrong|execution failed)' /tmp/assemble-release.log | tail -n 40 || true)"
-            if [[ -z "$diagnostics" ]]; then diagnostics="$(tail -n 20 /tmp/assemble-release.log)"; fi
-            summary="$(printf '%s' "$diagnostics" | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g')"
-            echo "::error title=Gradle assembleRelease failed::$summary"
-            exit 1
-          }
-
       - name: Run Android host unit tests
         run: ./gradlew :android-host:test --stacktrace
+
+      - name: Verify generated S1 fixture APK
+        run: python3 scripts/verify_fixture_apk.py fixture-guest/build/outputs/apk/debug/fixture-guest-debug.apk
 
       - name: Verify Android, custom-native, Flutter, and Dart binaries
         run: |
@@ -119,13 +111,21 @@ jobs:
       - name: Run native test suite (host-side)
         run: sh scripts/native_tests.sh
 
-      - name: Upload APK artifacts
+      - name: Upload host APK artifacts
         uses: actions/upload-artifact@v4
         with:
           name: android-host-apks-${{ github.sha }}
           path: |
             android-host/build/outputs/apk/debug/android-host-debug.apk
             android-host/build/outputs/apk/release/android-host-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload S1 fixture artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fixture-guest-apk-${{ github.sha }}
+          path: fixture-guest/build/outputs/apk/debug/fixture-guest-debug.apk
           if-no-files-found: error
           retention-days: 14
 

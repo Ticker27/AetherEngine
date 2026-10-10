@@ -4,31 +4,60 @@ import com.aether.host.target.TargetApkContract
 import java.util.Locale
 
 /**
- * Exact package/version gate plus explicit signer pins for the selected target APK.
- * The version identity is deliberately fixed to APKPure's 8 Ball Pool 56.30.0 listing;
- * signer SHA-256 pins still have to come from the actual APK certificate.
+ * Exact package/version gate plus explicit signer pins for one guest profile.
+ *
+ * The default constructor remains pinned to [TargetApkContract]. S1 passes an explicit
+ * [GuestApkTrustProfile], so the first-party fixture exercises the same verifier without
+ * weakening or conflating the production target policy.
  */
 class GuestApkTrustPolicy(
-    trustedSignerSha256: Set<String>,
+    val profile: GuestApkTrustProfile,
 ) {
-    val expectedPackageName: String = TargetApkContract.PACKAGE_NAME
-    val expectedVersionName: String = TargetApkContract.VERSION_NAME
-    val expectedVersionCode: Long = TargetApkContract.VERSION_CODE
-
-    val trustedSignerSha256: Set<String> = trustedSignerSha256
+    val expectedPackageName: String = profile.packageName
+    val expectedVersionName: String = profile.versionName
+    val expectedVersionCode: Long = profile.versionCode
+    val trustedSignerSha256: Set<String> = profile.trustedSignerSha256
         .map(::normalizeFingerprint)
         .toSet()
 
+    constructor(trustedSignerSha256: Set<String>) : this(
+        GuestApkTrustProfile(
+            packageName = TargetApkContract.PACKAGE_NAME,
+            versionName = TargetApkContract.VERSION_NAME,
+            versionCode = TargetApkContract.VERSION_CODE,
+            trustedSignerSha256 = trustedSignerSha256,
+        ),
+    )
+
+    constructor(
+        trustedSignerSha256: Set<String>,
+        expectedPackageName: String,
+        expectedVersionName: String,
+        expectedVersionCode: Long,
+    ) : this(
+        GuestApkTrustProfile(
+            packageName = expectedPackageName,
+            versionName = expectedVersionName,
+            versionCode = expectedVersionCode,
+            trustedSignerSha256 = trustedSignerSha256,
+        ),
+    )
+
     init {
-        require(this.trustedSignerSha256.isNotEmpty()) {
+        require(expectedPackageName.matches(PACKAGE_NAME_PATTERN)) {
+            "Expected package name is invalid"
+        }
+        require(expectedVersionName.isNotBlank()) { "Expected version name is required" }
+        require(expectedVersionCode > 0) { "Expected version code must be positive" }
+        require(trustedSignerSha256.isNotEmpty()) {
             "At least one trusted signer SHA-256 fingerprint is required"
         }
-        require(this.trustedSignerSha256.all { it.matches(SHA256_PATTERN) }) {
+        require(trustedSignerSha256.all { it.matches(SHA256_PATTERN) }) {
             "Signer fingerprints must contain exactly 64 hexadecimal characters"
         }
     }
 
-    /** Returns normalized signer pins only when package, exact release, and signers match. */
+    /** Returns normalized signer pins only when identity and signers match exactly. */
     fun verify(
         packageName: String,
         versionName: String?,
@@ -55,6 +84,7 @@ class GuestApkTrustPolicy(
     }
 
     companion object {
+        private val PACKAGE_NAME_PATTERN = Regex("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+$")
         private val SHA256_PATTERN = Regex("^[0-9a-f]{64}$")
 
         private fun normalizeFingerprint(value: String): String = value

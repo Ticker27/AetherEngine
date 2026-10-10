@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ANDROID_NS = "{http://schemas.android.com/apk/res/android}"
 MANIFEST_PATH = ROOT / "android-host/src/main/AndroidManifest.xml"
+FIXTURE_MANIFEST_PATH = ROOT / "fixture-guest/src/main/AndroidManifest.xml"
 
 REQUIRED_FILES = [
     "android-host/src/main/kotlin/com/aether/host/AetherApplication.kt",
@@ -22,6 +23,8 @@ REQUIRED_FILES = [
     "android-host/src/main/kotlin/com/aether/host/target/TargetApkContract.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/loader/DynamicApkLoader.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/loader/GuestApkTrustPolicy.kt",
+    "android-host/src/main/kotlin/com/aether/host/virtualization/loader/GuestApkTrustProfile.kt",
+    "android-host/src/androidTest/kotlin/com/aether/host/virtualization/loader/FixtureGuestLoaderTest.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/loader/GuestClassLoaderProxy.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/filesystem/GuestVirtualFileSystem.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/activity/VirtualActivity.kt",
@@ -45,6 +48,7 @@ REQUIRED_FILES = [
     "settings.gradle.kts",
     "flutter-app/pubspec.yaml",
     "scripts/verify_apk_architecture.py",
+    "scripts/verify_fixture_apk.py",
     "scripts/check_local.sh",
     "scripts/native_tests.sh",
     "integration-test/native/native_smoke_demo.cpp",
@@ -57,6 +61,15 @@ REQUIRED_FILES = [
     "android-host/src/test/kotlin/com/aether/host/virtualization/loader/GuestClassLoaderProxyTest.kt",
     "android-host/src/test/kotlin/com/aether/host/virtualization/filesystem/GuestVirtualFileSystemTest.kt",
     "android-host/src/main/kotlin/com/aether/host/MainActivity.kt",
+    "fixture-guest/build.gradle.kts",
+    "fixture-guest/src/main/AndroidManifest.xml",
+    "fixture-guest/src/main/java/com/aether/fixture/FixtureApplication.java",
+    "fixture-guest/src/main/java/com/aether/fixture/FixtureActivity.java",
+    "fixture-guest/src/main/java/com/aether/fixture/FixtureService.java",
+    "fixture-guest/src/main/java/com/aether/fixture/FixtureReceiver.java",
+    "fixture-guest/src/main/res/values/strings.xml",
+    "fixture-guest/src/main/res/values/styles.xml",
+    "fixture-guest/src/main/assets/fixture.txt",
 ]
 
 PACKAGE = "com.aether.host.virtualization"
@@ -226,6 +239,11 @@ def main() -> None:
     host_gradle = (ROOT / "android-host/build.gradle.kts").read_text()
     settings_gradle = (ROOT / "settings.gradle.kts").read_text()
     flutter_pubspec = (ROOT / "flutter-app/pubspec.yaml").read_text()
+    static_modules = re.findall(r'(?m)^include\("(:[\w-]+)"\)$', settings_gradle)
+    if static_modules != [":android-host", ":fixture-guest"]:
+        fail(f"root Android modules are not canonical: {static_modules}")
+    if (ROOT / "aether-engine").exists() or (ROOT / ".github/workflows/aether-engine.yml").exists():
+        fail("legacy nested Android project or workflow is still present")
     channel_source = (ROOT / "android-host/src/main/kotlin/com/aether/host/bridge/AetherRuntimeChannel.kt").read_text()
     if 'implementation(project(":flutter"))' not in host_gradle:
         fail("Android host must depend on the generated Flutter module")
@@ -250,7 +268,39 @@ def main() -> None:
     if 'com/aether/host/bridge/Native' not in registry_source:
         fail("JNI registry class path does not match the Native Kotlin package")
 
-    print("Host container, guest loader/VFS foundations, Flutter embedding, JNI, and manifest structures are consistent.")
+    fixture_gradle = (ROOT / "fixture-guest/build.gradle.kts").read_text()
+    fixture_manifest = ET.parse(FIXTURE_MANIFEST_PATH).getroot()
+    fixture_app = fixture_manifest.find("application")
+    if fixture_app is None:
+        fail("fixture manifest has no <application>")
+    if 'applicationId = "com.aether.fixture"' not in fixture_gradle:
+        fail("fixture application id must remain com.aether.fixture")
+    if 'implementation(project(":flutter"))' in fixture_gradle:
+        fail("fixture must not depend on the Flutter host module")
+    if 'signingConfigs' in fixture_gradle or 'storePassword' in fixture_gradle:
+        fail("fixture must not carry a private signing key")
+    fixture_components = {
+        node.get(f"{ANDROID_NS}name", ""): node
+        for tag in ("activity", "service", "receiver")
+        for node in fixture_app.findall(tag)
+    }
+    required_fixture_components = {
+        ".FixtureActivity": "activity",
+        ".FixtureService": "service",
+        ".FixtureReceiver": "receiver",
+    }
+    for name, tag in required_fixture_components.items():
+        if name not in fixture_components:
+            fail(f"fixture manifest is missing {tag} {name}")
+    if fixture_components[".FixtureActivity"].get(f"{ANDROID_NS}exported") != "true":
+        fail("fixture launcher activity must be exported")
+    for name in (".FixtureService", ".FixtureReceiver"):
+        if fixture_components[name].get(f"{ANDROID_NS}exported") != "false":
+            fail(f"fixture component must be private: {name}")
+    if not (ROOT / "fixture-guest/src/main/assets/fixture.txt").read_text().strip() == "aether-s1-fixture":
+        fail("fixture asset content is not deterministic")
+
+    print("Canonical host, S1 fixture, guest loader/VFS foundations, Flutter embedding, JNI, and manifest structures are consistent.")
 
 
 if __name__ == "__main__":

@@ -3,6 +3,17 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val fixtureApk = project(":fixture-guest").layout.buildDirectory.file(
+    "outputs/apk/debug/fixture-guest-debug.apk",
+)
+val stagedFixtureApk = layout.buildDirectory.dir("generated/androidTestAssets")
+val stageFixtureApk by tasks.registering(Copy::class) {
+    dependsOn(project(":fixture-guest").tasks.named("assembleDebug"))
+    from(fixtureApk)
+    into(stagedFixtureApk)
+    rename { "fixture-guest.apk" }
+}
+
 android {
     namespace = "com.aether.host"
     compileSdk = 36
@@ -56,6 +67,10 @@ android {
         getByName("test") {
             kotlin.srcDirs("src/test/kotlin")
         }
+        getByName("androidTest") {
+            kotlin.srcDirs("src/androidTest/kotlin")
+            assets.srcDir(stagedFixtureApk)
+        }
     }
 
     externalNativeBuild {
@@ -76,6 +91,10 @@ android {
     }
 }
 
+tasks.named("mergeDebugAndroidTestAssets") {
+    dependsOn(stageFixtureApk)
+}
+
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
@@ -91,4 +110,9 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.mockito:mockito-core:5.11.0")
     testImplementation("androidx.test:core:1.5.0")
+
+    androidTestImplementation("androidx.test:core:1.5.0")
+    androidTestImplementation("androidx.test:runner:1.5.2")
+    androidTestImplementation("androidx.test:rules:1.5.0")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }

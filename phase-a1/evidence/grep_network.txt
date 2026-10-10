@@ -1,7 +1,0 @@
-# D-A1.4 evidence 2: network API usage in aether-engine/app/src/main
-[grep exit=1] (1 = zero matches)
-HttpURLConnection: 0 matching files
-OkHttp: 0 matching files
-Retrofit: 0 matching files
-Socket: 0 matching files
-java.net.URL: 0 matching files
