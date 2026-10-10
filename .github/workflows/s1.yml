@@ -179,7 +179,8 @@ jobs:
           [[ "$(adb shell getprop ro.product.cpu.abi | tr -d '\r')" == x86_64 ]]
           adb logcat -c
           # Only app/runner/fixture tags, not full device logcat or private storage.
-          adb logcat -v threadtime AetherApplication:V HostInitializer:V AetherS1:V S1Evidence:V FixtureGuestLoaderTest:V FixtureGuestLaunchTest:V FixtureActivity:V FixtureGuest:V TestRunner:V AndroidJUnitRunner:V AndroidRuntime:E '*:S' > evidence/scoped-logcat.txt 2>&1 &
+          # AetherFixture is the tag VirtualActivity logs under; ActivityTaskManager shows start rejections.
+          adb logcat -v threadtime AetherApplication:V HostInitializer:V AetherS1:V S1Evidence:V AetherFixture:V FixtureGuestLoaderTest:V FixtureGuestLaunchTest:V FixtureActivity:V FixtureGuest:V TestRunner:V AndroidJUnitRunner:V AndroidRuntime:E ActivityTaskManager:W ActivityManager:W '*:S' > evidence/scoped-logcat.txt 2>&1 &
           log_pid=$!
           # Sample only the host process while instrumentation is alive.
           # readlink can be denied by SELinux; retain that denial, never infer bitness.

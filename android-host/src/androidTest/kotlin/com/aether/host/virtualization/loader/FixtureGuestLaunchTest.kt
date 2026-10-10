@@ -64,7 +64,14 @@ class FixtureGuestLaunchTest {
     fun hostRouteCreatesFixtureUiAndReleasesLifecycleLease() {
         val guest = loadFixtureGuest()
         val launchIntent = prepareLaunch(guest)
+        Log.i("AetherS1", "launch intent hasToken=${launchIntent.hasExtra(
+            com.aether.host.virtualization.activity.CooperativeFixtureController.EXTRA_TOKEN)} " +
+            "component=${launchIntent.component?.className}")
         ActivityScenario.launch<ProxyActivityP0>(launchIntent).use { scenario ->
+            scenario.onActivity { activity ->
+                Log.i("AetherS1", "activity started: state=${activity.lifecycle.currentState} " +
+                    "finishing=${activity.isFinishing} hasSession=${host.fixtureController.hasSession()}")
+            }
             assertFixtureUiVisible(scenario)
             scenario.onActivity { activity ->
                 instrumentation.callActivityOnNewIntent(activity, Intent("fixture.NEW_INTENT"))
