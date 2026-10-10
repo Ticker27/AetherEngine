@@ -155,9 +155,9 @@ jobs:
       - name: CI passed
         run: echo "AetherEngine release-only CI passed; one signed v1/v2 APK was assembled and uploaded."
 
-  s1-arm64-instrumentation:
-    name: S1 ARM64 Connected Instrumentation
-    runs-on: ubuntu-24.04-arm
+  s1-instrumentation:
+    name: S1 Connected Instrumentation (emulator)
+    runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
       - name: Checkout
@@ -170,10 +170,10 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Set up Flutter on ARM64 stable channel
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: "3.47.0"
           cache: true
 
       - name: Bootstrap Flutter module
@@ -182,12 +182,18 @@ jobs:
       - name: Build fixture and host instrumentation inputs
         run: ./gradlew :fixture-guest:assembleDebug :android-host:assembleDebugAndroidTest --stacktrace --console=plain
 
-      - name: Run S1 instrumentation on ARM64 emulator
+      - name: Enable KVM for emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+
+      - name: Run S1 instrumentation on x86_64 emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
           target: google_apis
-          arch: arm64-v8a
+          arch: x86_64
           disable-animations: true
           script: ./gradlew :android-host:connectedDebugAndroidTest --stacktrace --console=plain
 
@@ -195,7 +201,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: s1-arm64-instrumentation-${{ github.sha }}
+          name: s1-instrumentation-${{ github.sha }}
           path: |
             android-host/build/reports/androidTests/
             android-host/build/outputs/androidTest-results/
