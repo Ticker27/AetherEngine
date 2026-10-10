@@ -19,21 +19,21 @@ val stagedFixtureApkDir = layout.buildDirectory.dir("generated/androidTestAssets
 val configSplitDir = layout.buildDirectory.dir("generated/fixtureSplit")
 // AGP's disposable debug signing config is generated at this path by the fixture build.
 // CI may override it when the runner uses a non-default Gradle user home.
-val fixtureDebugKeystore = providers.gradleProperty("aetherFixtureKeystore")
+// AGP creates this keystore while signing the fixture. It may not exist at configuration time on a
+// fresh runner, so it is NOT declared as a file input (Gradle would reject it). The fixture APK is
+// a declared input and embeds its signing certificate, so any keystore change still re-runs the task.
+val fixtureDebugKeystorePath = providers.gradleProperty("aetherFixtureKeystore")
     .orElse(providers.provider { "${System.getProperty("user.home")}/.android/debug.keystore" })
-    .map { file(it) }
 val createFixtureConfig by tasks.registering(Exec::class) {
     dependsOn(project(":fixture-guest").tasks.named("assembleDebug"))
     outputs.file(configSplitDir.map { it.file("fixture-config-arm64.apk") })
     outputs.file(configSplitDir.map { it.file("fixture-signer.sha256") })
     inputs.file(rootProject.file("tools/create_fixture_config_split.py"))
     inputs.file(fixtureApk)
-    // AGP creates the debug keystore while signing the fixture, so it may not exist at
-    // configuration time on a fresh runner. Mark it optional; doFirst verifies it at execution.
-    inputs.file(fixtureDebugKeystore).optional(true)
+    inputs.property("fixtureKeystorePath", fixtureDebugKeystorePath)
     inputs.property("buildToolsVersion", android.buildToolsVersion ?: "36.0.0")
     doFirst {
-        val keystore = fixtureDebugKeystore.get()
+        val keystore = file(fixtureDebugKeystorePath.get())
         check(keystore.isFile) {
             "Fixture debug keystore is missing: ${keystore.absolutePath}; assemble fixture first or set -PaetherFixtureKeystore"
         }
