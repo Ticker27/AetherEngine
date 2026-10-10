@@ -170,15 +170,6 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.47.0"
-          cache: true
-
-      - name: Bootstrap Flutter module
-        run: cd flutter-app && flutter pub get
-
       - name: Build fixture and host instrumentation inputs
         run: ./gradlew :fixture-guest:assembleDebug :android-host:assembleDebugAndroidTest --stacktrace --console=plain
 
