@@ -38,6 +38,7 @@ rm -f "$aligned" "$signed"
   --ks-key-alias "$RELEASE_KEY_ALIAS" \
   --ks-pass "env:RELEASE_STORE_PASSWORD" \
   --key-pass "env:RELEASE_KEY_PASSWORD" \
+  --min-sdk-version 1 \
   --v1-signing-enabled true \
   --v2-signing-enabled true \
   --v3-signing-enabled false \
