@@ -69,8 +69,8 @@ class FixtureGuestLaunchTest {
             "component=${launchIntent.component?.className}")
         ActivityScenario.launch<ProxyActivityP0>(launchIntent).use { scenario ->
             scenario.onActivity { activity ->
-                Log.i("AetherS1", "activity started: state=${activity.lifecycle.currentState} " +
-                    "finishing=${activity.isFinishing} hasSession=${host.fixtureController.hasSession()}")
+                Log.i("AetherS1", "activity started: finishing=${activity.isFinishing} " +
+                    "destroyed=${activity.isDestroyed} hasSession=${host.fixtureController.hasSession()}")
             }
             assertFixtureUiVisible(scenario)
             scenario.onActivity { activity ->
