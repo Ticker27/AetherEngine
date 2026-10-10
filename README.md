@@ -59,23 +59,27 @@ TMPDIR=/tmp sh scripts/check_local.sh
 The environment used by Minis may expose a non-existent `TMPDIR`; setting it to `/tmp` is
 required there. The check runs the source-structure verifier and host-side native tests.
 
-## Full CI checks
+## Release-only CI
 
-GitHub Actions runs the full environment-dependent build:
+The `main` CI build and tag release workflow expose only one APK artifact:
 
-```sh
-cd flutter-app && flutter pub get && cd ..
-./gradlew :fixture-guest:assembleDebug \
-  :android-host:assembleDebug \
-  :android-host:assembleRelease \
-  :android-host:assembleDebugAndroidTest \
-  :android-host:test
+```text
+aether-engine-release.apk
 ```
 
-The real `DynamicApkLoader` test is under `android-host/src/androidTest` and requires an ARM64
-Android device/emulator because the host is currently arm64-only. Until such a device job is
-available, normal CI assembles the instrumentation APK and validates the fixture statically;
-that is not claimed as a completed on-device S1 result.
+The pipeline assembles the host release variant, materializes the signing keystore from the
+protected `production` GitHub Actions environment, applies `zipalign`, signs with Android APK
+Signature Scheme **v1 and v2**, verifies both schemes with `apksigner`, runs host/native/Flutter
+checks, and uploads only the signed APK. The unsigned intermediate APK is never uploaded or
+published. There is no debug, fixture, instrumentation, or unsigned release artifact in the
+release output.
+
+The signing secrets are `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`,
+`RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD`. They are not stored in Git. Losing or replacing
+the production signing key breaks update compatibility for already-installed APKs.
+
+The S1 fixture and instrumentation test remain source-level development assets for the next
+milestone; they are not release artifacts and are not bundled into the host APK.
 
 ## Security boundary
 

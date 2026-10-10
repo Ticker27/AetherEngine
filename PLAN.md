@@ -55,8 +55,8 @@ represents only the pinned external target. The fixture does not alter `TargetAp
 ### S1 acceptance criteria
 
 1. `:fixture-guest:assembleDebug` produces the fixture APK.
-2. The source verifier checks the fixture identity, manifest components, asset, signing setup,
-   and host/fixture separation.
+2. The source verifier checks the fixture identity, manifest components, deterministic asset,
+   signing boundary, and host/fixture separation.
 3. The fixture APK is staged as a generated Android-test asset; no APK is committed.
 4. JVM tests continue to cover policy, class delegation, filesystem, and host logic.
 5. The Android instrumentation test loads the generated fixture with `DynamicApkLoader`.
@@ -71,7 +71,8 @@ represents only the pinned external target. The fixture does not alter `TargetAp
 ### Current gate state
 
 - Local structure/native gate: green when run with `TMPDIR=/tmp`.
-- CI fixture assembly, static APK verification, and Android-test APK assembly: wired in `ci.yml`.
+- Main/tag CI now produces one signed release APK only; fixture and instrumentation remain
+  source-level S1 assets and are not release artifacts.
 - ARM64 connected instrumentation run: **pending device/runner**.
 - S1 is not marked complete until the instrumentation result is recorded on an ARM64 target.
 
