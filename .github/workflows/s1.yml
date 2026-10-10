@@ -92,6 +92,14 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264" >> "$GITHUB_ENV"
           { java -version; flutter --version; "$SDKM" --list_installed; } > evidence/logs/toolchain.txt 2>&1
 
+      - name: Diagnose AGP fixture debug signing (read-only signingReport)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Read-only: asks AGP which keystore and certificate it uses for the fixture debug build.
+          bash ./gradlew :fixture-guest:signingReport --console=plain 2>&1 | tee evidence/logs/agp-signing-report.log
+          rg -n -A8 "Variant: debug" evidence/logs/agp-signing-report.log | tee evidence/logs/agp-debug-signing.txt || true
+
       - name: Create the standard disposable debug keystore for the fixture split
         shell: bash
         run: |
