@@ -7,10 +7,30 @@ import org.junit.Test
 
 class GuestApkTrustPolicyTest {
     @Test
-    fun `target contract is only 8 Ball Pool 56 30 0`() {
+    fun `target contract is only 8 Ball Pool 56 31 0`() {
         assertEquals("com.miniclip.eightballpool", TargetApkContract.PACKAGE_NAME)
-        assertEquals("56.30.0", TargetApkContract.VERSION_NAME)
-        assertEquals(4028L, TargetApkContract.VERSION_CODE)
+        assertEquals("56.31.0", TargetApkContract.VERSION_NAME)
+        assertEquals(4035L, TargetApkContract.VERSION_CODE)
+    }
+
+    @Test
+    fun `rejects the previous target release even when package and signer match`() {
+        assertThrows(UntrustedGuestApkException::class.java) {
+            policy().verify(
+                packageName = TargetApkContract.PACKAGE_NAME,
+                versionName = "56.30.0",
+                versionCode = 4028L,
+                signerSha256 = setOf(CERTIFICATE),
+            )
+        }
+    }
+
+    @Test
+    fun `accepts the verified 56 31 0 identity when the configured signer matches`() {
+        assertEquals(
+            setOf(CERTIFICATE),
+            policy().verify("com.miniclip.eightballpool", "56.31.0", 4035L, setOf(CERTIFICATE)),
+        )
     }
 
     @Test
@@ -64,7 +84,7 @@ class GuestApkTrustPolicyTest {
         assertThrows(UntrustedGuestApkException::class.java) {
             policy().verify(
                 packageName = TargetApkContract.PACKAGE_NAME,
-                versionName = "56.30.1",
+                versionName = "56.31.1",
                 versionCode = TargetApkContract.VERSION_CODE,
                 signerSha256 = setOf(CERTIFICATE),
             )

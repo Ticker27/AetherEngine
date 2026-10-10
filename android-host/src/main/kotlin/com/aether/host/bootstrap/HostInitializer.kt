@@ -98,7 +98,7 @@ class HostInitializer(application: Application) : HostRuntimeInitializer {
     }
 
     /**
-     * Loads the selected 8 Ball Pool 56.30.0 APK only when the process-local feature switch
+     * Loads the selected 8 Ball Pool 56.31.0 APK only when the process-local feature switch
      * is enabled and explicit signer pins are supplied. Call on a worker thread.
      */
     @Synchronized

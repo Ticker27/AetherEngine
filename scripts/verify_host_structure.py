@@ -163,11 +163,11 @@ def main() -> None:
     target_contract = target_contract_path.read_text()
     required_target_values = (
         'const val PACKAGE_NAME = "com.miniclip.eightballpool"',
-        'const val VERSION_NAME = "56.30.0"',
-        "const val VERSION_CODE = 4028L",
+        'const val VERSION_NAME = "56.31.0"',
+        "const val VERSION_CODE = 4035L",
     )
     if any(value not in target_contract for value in required_target_values):
-        fail("target release contract must remain pinned to 8 Ball Pool 56.30.0 (4028)")
+        fail("target release contract must remain pinned to 8 Ball Pool 56.31.0 (4035)")
 
     for simple_name, relative in SOURCE_CLASSES.items():
         source = (ROOT / relative).read_text()

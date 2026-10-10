@@ -39,7 +39,7 @@ the fixture's Activity, Service, or Receiver.
 - the build's debug signer is checked by the instrumentation run.
 
 The host's generic `GuestApkTrustPolicy` accepts an explicit `GuestApkTrustProfile`. The external
-8 Ball Pool contract remains separate and unchanged. The Android instrumentation test stages the
+8 Ball Pool contract remains separate from the fixture policy. The Android instrumentation test stages the
 CI-built fixture APK, reads its signer metadata into a fixture-only profile, verifies its
 package/version/signer, loads its Activity/Service/Receiver classes through `DynamicApkLoader`,
 checks the private digest cache, and checks the VFS root.
@@ -88,5 +88,10 @@ API bypass, signature spoofing, package-manager spoofing, anti-cheat bypass, lic
 external endpoint, or imported target APK is part of this repository.
 
 The external target policy remains fixed to 8 Ball Pool `com.miniclip.eightballpool`, version
-`56.30.0` / code `4028`, with explicit signer pins supplied out-of-band. The target APK is not
-committed and is not a CI dependency.
+`56.31.0` / code `4035`, with explicit signer pins supplied out-of-band. The installed package
+uses a base APK plus an ARM64 configuration split; the current single-APK loader does not yet
+support that installed APK set. Matching identity does not establish signer trust or launch
+compatibility. The target APK is not committed and is not a CI dependency.
+
+See [the next-step gates](GUEST_56310_PLAN.md) for evidence, unsupported capabilities, and the
+first-party tests required before any external guest launch is considered.

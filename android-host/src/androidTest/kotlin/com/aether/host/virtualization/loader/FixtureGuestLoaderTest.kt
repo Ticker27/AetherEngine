@@ -5,6 +5,7 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import java.security.MessageDigest
 import java.util.zip.ZipFile
@@ -20,11 +21,7 @@ import org.junit.runner.RunWith
 class FixtureGuestLoaderTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
 
-    companion object {
-        private val FIXTURE_SIGNER_SHA256 = setOf(
-            "45d18083f6cd34741f19b45dfe9a8b380613a914959b8fd682e4a7c7ff73a7bc",
-        )
-    }
+    private val testAssetContext: Context = InstrumentationRegistry.getInstrumentation().context
 
     @Test
     fun fixtureApkLoadsThroughTrustDexAndVfsPath() {
@@ -112,7 +109,7 @@ class FixtureGuestLoaderTest {
 
     private fun copyFixtureToPrivateStorage(): File {
         val destination = File(context.cacheDir, "s1-fixture-guest.apk")
-        context.assets.open("fixture-guest.apk").use { input ->
+        testAssetContext.assets.open("fixture-guest.apk").use { input ->
             destination.outputStream().use { output -> input.copyTo(output) }
         }
         return destination

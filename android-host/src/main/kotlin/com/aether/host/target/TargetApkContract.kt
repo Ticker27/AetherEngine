@@ -2,11 +2,11 @@ package com.aether.host.target
 
 /**
  * Identity of the single guest release currently accepted by Aether.
- * Values follow the 8 Ball Pool 56.30.0 listing and must be checked against its APK
- * manifest when that exact binary is available.
+ * Package/version identity is verified from the supplied 56.31.0 APK manifest and
+ * the installed package metadata. This does not establish signer trust or launch support.
  */
 object TargetApkContract {
     const val PACKAGE_NAME = "com.miniclip.eightballpool"
-    const val VERSION_NAME = "56.30.0"
-    const val VERSION_CODE = 4028L
+    const val VERSION_NAME = "56.31.0"
+    const val VERSION_CODE = 4035L
 }

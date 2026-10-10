@@ -1,6 +1,10 @@
 # AetherEngine delivery plan
 
-Status: **S1 implementation in progress** · 2026-10-10
+Status: **S1 evidence pending; target identity 56.31.0 / 4035 aligned on a local branch** · 2026-10-11
+
+The installed target is a base APK plus an ARM64 configuration split. See
+[GUEST_56310_PLAN.md](GUEST_56310_PLAN.md) for current call-path evidence and implementation gates.
+Identity alignment is not guest-launch support.
 
 ## Canonical source of truth
 
@@ -84,9 +88,12 @@ as deterministic JSON below the guest VFS root, reload it, resolve `MAIN` + `LAU
 
 ## S3 — Install and launch fixture in a proxy slot
 
-Implement a feature-flagged `GuestRuntimeAdapter` that constructs the fixture Application through
-the guest classloader, attaches its launcher Activity to an existing proxy slot, forwards lifecycle
-callbacks, and releases the slot on destroy. Default remains off.
+First prove public-API resource and lifecycle feasibility with a cooperative first-party fixture.
+A feature-flagged `GuestRuntimeAdapter` may host a fixture entry-point contract inside an existing
+host proxy Activity and forward lifecycle callbacks with explicit cleanup. Do not claim that this
+attaches an arbitrary third-party Android Activity: DEX class loading is not framework attachment.
+Default remains off; external guest launch stays unsupported until the required capabilities are
+verified.
 
 ## S4 — Guest context and resources
 
