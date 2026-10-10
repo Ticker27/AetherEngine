@@ -6,12 +6,11 @@ plugins {
 val fixtureApk = project(":fixture-guest").layout.buildDirectory.file(
     "outputs/apk/debug/fixture-guest-debug.apk",
 )
-val stagedFixtureApk = layout.buildDirectory.dir("generated/androidTestAssets")
-val stagedFixtureApkDir = file("$buildDir/generated/androidTestAssets")
+val stagedFixtureApkDir = layout.buildDirectory.dir("generated/androidTestAssets").get().asFile
 val stageFixtureApk by tasks.registering(Copy::class) {
     dependsOn(project(":fixture-guest").tasks.named("assembleDebug"))
     from(fixtureApk)
-    into(stagedFixtureApk)
+    into(stagedFixtureApkDir)
     rename { "fixture-guest.apk" }
 }
 
@@ -92,8 +91,10 @@ android {
     }
 }
 
-tasks.named("mergeDebugAndroidTestAssets") {
-    dependsOn(stageFixtureApk)
+tasks.configureEach {
+    if (name == "mergeDebugAndroidTestAssets" || name == "assembleDebugAndroidTest") {
+        dependsOn(stageFixtureApk)
+    }
 }
 
 kotlin {
