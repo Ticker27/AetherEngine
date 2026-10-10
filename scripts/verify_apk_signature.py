@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -15,20 +16,25 @@ def fail(message: str) -> None:
     raise SystemExit(1)
 
 
+def find_apksigner() -> Path | str:
+    configured_home = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
+    if configured_home:
+        candidates = sorted(Path(configured_home).glob("build-tools/*/apksigner"), reverse=True)
+        if candidates:
+            return candidates[0]
+    on_path = shutil.which("apksigner")
+    if on_path:
+        return on_path
+    fail("apksigner was not found under ANDROID_HOME/ANDROID_SDK_ROOT or PATH")
+
+
 def main() -> None:
     if len(sys.argv) != 2:
         fail("usage: verify_apk_signature.py <signed-apk>")
     apk = Path(sys.argv[1])
     if not apk.is_file():
         fail(f"APK does not exist: {apk}")
-    apksigner = next(
-        (Path(path) / "apksigner" for path in sys.argv[2:]),
-        None,
-    )
-    if apksigner is None:
-        android_home = Path(os.environ.get("ANDROID_HOME", ""))
-        candidates = sorted(android_home.glob("build-tools/*/apksigner"), reverse=True)
-        apksigner = candidates[0] if candidates else Path("apksigner")
+    apksigner = find_apksigner()
     try:
         result = subprocess.run(
             [str(apksigner), "verify", "--verbose", str(apk)],

@@ -77,40 +77,24 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264" >> "$GITHUB_ENV"
 
       - name: Prepare build scripts
-        run: |
-          chmod +x ./gradlew
-          chmod +x scripts/prepare_release_keystore.sh scripts/sign_release_apk.sh scripts/verify_apk_signature.py
+        run: chmod +x ./gradlew scripts/verify_apk_signature.py
 
-      - name: Assemble host release APK
-        run: ./gradlew :android-host:assembleRelease --stacktrace --console=plain
-
-      - name: Materialize production release keystore
+      - name: Assemble signed host release APK
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
-        run: ./scripts/prepare_release_keystore.sh android-host/build/signing/release.p12
-
-      - name: Sign release APK with v1 and v2
-        env:
-          ANDROID_BUILD_TOOLS_VERSION: "36.0.0"
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-        run: >-
-          ./scripts/sign_release_apk.sh
-          android-host/build/outputs/apk/release/android-host-release-unsigned.apk
-          android-host/build/outputs/apk/release/aether-engine-release.apk
-          android-host/build/signing/release.p12
-
-      - name: Remove unsigned release intermediate
-        run: rm -f android-host/build/outputs/apk/release/android-host-release-unsigned.apk
+        run: ./gradlew :android-host:assembleRelease --stacktrace --console=plain
 
       - name: Run Android host unit tests
         run: ./gradlew :android-host:test --stacktrace
 
+      - name: Name signed release APK
+        run: cp android-host/build/outputs/apk/release/android-host-release.apk android-host/build/outputs/apk/release/aether-engine-release.apk
+
       - name: Verify signed release APK
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
-        run: ./scripts/verify_apk_signature.py android-host/build/outputs/apk/release/aether-engine-release.apk
+        run: ANDROID_HOME="$ANDROID_HOME" ANDROID_SDK_ROOT="$ANDROID_SDK_ROOT" ./scripts/verify_apk_signature.py android-host/build/outputs/apk/release/aether-engine-release.apk
 
       - name: Verify release architecture
         run: python3 scripts/verify_apk_architecture.py android-host/build/outputs/apk/release/aether-engine-release.apk release

@@ -48,8 +48,6 @@ REQUIRED_FILES = [
     "settings.gradle.kts",
     "flutter-app/pubspec.yaml",
     "scripts/verify_apk_architecture.py",
-    "scripts/prepare_release_keystore.sh",
-    "scripts/sign_release_apk.sh",
     "scripts/verify_apk_signature.py",
     "scripts/check_local.sh",
     "scripts/native_tests.sh",

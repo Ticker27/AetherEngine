@@ -3,6 +3,31 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val releaseKeystoreBase64 = providers.environmentVariable("RELEASE_KEYSTORE_BASE64").orNull
+val releaseStorePassword = providers.environmentVariable("RELEASE_STORE_PASSWORD").orNull
+val releaseKeyAlias = providers.environmentVariable("RELEASE_KEY_ALIAS").orNull
+val releaseKeyPassword = providers.environmentVariable("RELEASE_KEY_PASSWORD").orNull
+val releaseSigningValues = listOf(
+    releaseKeystoreBase64,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+)
+val releaseSigningConfigured = releaseSigningValues.any { !it.isNullOrBlank() }
+if (releaseSigningConfigured && releaseSigningValues.any { it.isNullOrBlank() }) {
+    throw GradleException(
+        "Release signing requires RELEASE_KEYSTORE_BASE64, RELEASE_STORE_PASSWORD, " +
+            "RELEASE_KEY_ALIAS, and RELEASE_KEY_PASSWORD",
+    )
+}
+val releaseKeystoreFile = layout.buildDirectory.file("signing/release.p12").get().asFile
+if (releaseSigningConfigured) {
+    releaseKeystoreFile.parentFile.mkdirs()
+    releaseKeystoreFile.writeBytes(
+        java.util.Base64.getDecoder().decode(releaseKeystoreBase64!!),
+    )
+}
+
 val fixtureApk = project(":fixture-guest").layout.buildDirectory.file(
     "outputs/apk/debug/fixture-guest-debug.apk",
 )
@@ -47,10 +72,29 @@ android {
         }
     }
 
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            create("ciRelease") {
+                storeFile = releaseKeystoreFile
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+                storeType = "PKCS12"
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = false
+                enableV4Signing = false
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             isShrinkResources = false
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("ciRelease")
+            }
         }
         debug {
             isMinifyEnabled = false
