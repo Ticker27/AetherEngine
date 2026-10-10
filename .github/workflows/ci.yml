@@ -170,6 +170,15 @@ jobs:
           java-version: "17"
           cache: gradle
 
+      - name: Set up Flutter on ARM64 stable channel
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Bootstrap Flutter module
+        run: cd flutter-app && flutter pub get
+
       - name: Build fixture and host instrumentation inputs
         run: ./gradlew :fixture-guest:assembleDebug :android-host:assembleDebugAndroidTest --stacktrace --console=plain
 
