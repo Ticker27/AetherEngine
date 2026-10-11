@@ -38,6 +38,17 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install ripgrep for evidence extraction
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The scoped emulator script and the AGP/ABI evidence steps use rg. Without it the
+          # ABI/nativeReady extracts silently degrade to the "not observed" fallback, which is
+          # indistinguishable from genuinely missing evidence. Install before anything reads a log.
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ripgrep
+          rg --version
+
       - name: Initialize evidence and validate dispatch inputs
         id: prepare
         shell: bash

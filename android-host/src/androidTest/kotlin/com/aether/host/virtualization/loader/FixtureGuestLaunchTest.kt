@@ -74,7 +74,11 @@ class FixtureGuestLaunchTest {
             }
             assertFixtureUiVisible(scenario)
             scenario.onActivity { activity ->
-                instrumentation.callActivityOnNewIntent(activity, Intent("fixture.NEW_INTENT"))
+                // Keep the launch identity (component + action) intact: ActivityScenario matches
+                // lifecycle events by component/action/data/type/categories, not by extras. Giving
+                // the replacement intent a new action makes the scenario ignore every later event,
+                // including the one for the re-created instance.
+                instrumentation.callActivityOnNewIntent(activity, Intent(launchIntent))
             }
             scenario.recreate()
             assertFixtureUiVisible(scenario)
@@ -103,7 +107,10 @@ class FixtureGuestLaunchTest {
             // Reusing the same token while the lease is held must be rejected without touching
             // the original session.
             ActivityScenario.launch<ProxyActivityP0>(Intent(launchIntent)).use { duplicate ->
-                duplicate.onActivity { activity -> assertTrue(activity.isFinishing) }
+                // The duplicate is rejected during onCreate and finishes itself, so the scenario
+                // reports DESTROYED. onActivity() is unusable here: it throws whenever the tracked
+                // instance has already reached DESTROYED.
+                assertEquals(Lifecycle.State.DESTROYED, duplicate.state)
             }
             instrumentation.runOnMainSync { assertTrue(host.fixtureController.hasSession()) }
             assertFixtureUiVisible(original)
