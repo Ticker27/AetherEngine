@@ -52,9 +52,9 @@ class AetherRuntimeChannel(
                             "method is not in the host system-call contract",
                             method,
                         )
-                        return@setMethodCallHandler
+                    } else {
+                        result.success(Native.dispatchRequest(checkNotNull(method), payload))
                     }
-                    result.success(Native.dispatchRequest(checkNotNull(method), payload))
                 }
                 else -> result.notImplemented()
             }
