@@ -27,11 +27,11 @@ class SystemCallProvider : ProxyContentProvider() {
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
         dispatch("call", Uri.parse("system-call://$method"))
         if (!flagger.isEnabled(HostFeature.SYSTEM_CALL_IPC)) {
-            return bundleOf(SystemCallContract.rejectionPayload("system-call IPC is disabled"))
+            return bundleOf(*SystemCallContract.rejectionPayload("system-call IPC is disabled").toTypedArray())
         }
         return when (val validation = SystemCallContract.validate(method, arg)) {
             is SystemCallContract.Validation.Rejected ->
-                bundleOf(SystemCallContract.rejectionPayload(validation.reason))
+                bundleOf(*SystemCallContract.rejectionPayload(validation.reason).toTypedArray())
 
             is SystemCallContract.Validation.Accepted -> {
                 val bridgeMethod = validation.method.bridgeMethod
