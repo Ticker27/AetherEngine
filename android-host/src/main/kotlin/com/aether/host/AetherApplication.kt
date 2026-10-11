@@ -23,9 +23,6 @@ class AetherApplication : Application() {
         }
     }
 
-    /** Backwards-compatible entry point used by the bootstrap Activity and tests. */
-    fun tryInitializeNative(): Boolean = hostInitializer.initialize()
-
     override fun onTerminate() {
         try {
             AetherRuntime.shutdown()

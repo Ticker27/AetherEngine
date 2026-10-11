@@ -28,9 +28,6 @@ data class LoadedGuestApk internal constructor(
 ) {
     /** Eligibility only, not proof that arbitrary guest code is safe or cooperative. */
     val supportsCooperativeDex: Boolean get() = nativeLibraryEntries.isEmpty()
-    val unsupportedCapabilities: Set<UnsupportedGuestCapability> = java.util.Collections.unmodifiableSet(
-        UnsupportedGuestCapability.values().toSet(),
-    )
 }
 
 /**

@@ -97,9 +97,6 @@ class ProxyVpnService : VpnService() {
         tunnel = null
     }
 
-    /** Keeps the host's own control sockets out of the tunnel. */
-    fun protectSocket(socket: java.net.Socket): Boolean = protect(socket)
-
     private fun dispatch(event: String, intent: Intent? = null) {
         (application as? AetherApplication)?.hostInitializer?.dispatch(
             HostComponentEvent(

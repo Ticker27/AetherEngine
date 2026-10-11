@@ -13,9 +13,6 @@ package com.aether.host.virtualization.util
  */
 object ReflectionDescriptor {
 
-    /** Primitive descriptors, in the order the JVM spec defines them. */
-    private const val PRIMITIVES = "VZBCSIJFD"
-
     /** Letters that terminate an object or array type. */
     private const val TERMINATOR = ';'
 

@@ -16,10 +16,6 @@ data class GuestApkSplit(val name: String, val apkFile: File)
 
 data class LoadedGuestApkSplit(val name: String, val apkFile: File, val apkSha256: String)
 
-enum class UnsupportedGuestCapability {
-    NATIVE_LIBRARIES, ANDROID_RESOURCES, ANDROID_COMPONENT_LAUNCH, SANDBOX_ISOLATION,
-}
-
 class GuestApkLoadException(message: String, cause: Throwable? = null) :
     IllegalStateException(message, cause)
 
