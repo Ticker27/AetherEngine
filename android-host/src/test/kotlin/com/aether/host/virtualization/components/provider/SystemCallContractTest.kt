@@ -63,6 +63,7 @@ class SystemCallContractTest {
     @Test
     fun rejectionPayloadCarriesTheReasonAndNoData() {
         val payload = SystemCallContract.rejectionPayload("system-call IPC is disabled")
+            .toMap()
         assertEquals("false", payload[SystemCallContract.KEY_OK])
         assertEquals("system-call IPC is disabled", payload[SystemCallContract.KEY_ERROR])
         assertNull(payload[SystemCallContract.KEY_DATA])

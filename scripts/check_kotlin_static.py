@@ -150,6 +150,8 @@ def available_names(text: str, declarations: dict[str, set[str]]) -> set[str]:
     return names
 
 
+
+
 def strip_noise(text: str) -> str:
     """Remove comments, string literals, and char literals so they cannot produce false hits."""
     text = re.sub(r'"""(?:.|\n)*?"""', '""', text)
@@ -158,6 +160,10 @@ def strip_noise(text: str) -> str:
     text = re.sub(r"//[^\n]*", "", text)
     text = re.sub(r"/\*(?:.|\n)*?\*/", "", text)
     return text
+
+
+# The call-arity check reads sources through the name the audit tool uses.
+blank_out = strip_noise
 
 
 def check_labels(path: Path, text: str, problems: list[str]) -> None:
@@ -233,6 +239,142 @@ def check_jni_parity(problems: list[str]) -> None:
             problems.append(f"JNI descriptor for {name} has an unparseable parameter list: {descriptor}")
 
 
+def split_parameters(params: str) -> list[str]:
+    """Split a parameter list at top-level commas only.
+
+    `Map<String, String>` contains a comma that is not a parameter separator, so a plain
+    `split(",")` invents extra parameters and every arity check downstream is wrong.
+    """
+    parts: list[str] = []
+    current: list[str] = []
+    depth = 0
+    for char in params:
+        if char in "<([{":
+            depth += 1
+        elif char in ">)]}":
+            depth -= 1
+        if char == "," and depth == 0:
+            parts.append("".join(current))
+            current = []
+        else:
+            current.append(char)
+    if current:
+        parts.append("".join(current))
+    return [part.strip() for part in parts if part.strip()]
+
+
+def check_call_arity(problems: list[str], files: list[Path]) -> None:
+    """Argument-shape mismatches for calls to functions declared in this repository.
+
+    The failure this catches: `bundleOf(rejectionPayload(x))` where `bundleOf` takes
+    `vararg Pair<String, String>` and the argument is a Map. Kotlin reports it as an argument
+    type mismatch, which no amount of import checking finds.
+
+    Three rules, all derived from the declarations themselves:
+      1. A call must supply at least as many arguments as the function's required parameters.
+      2. A non-spread argument must not be a map-producing expression when the callee declares
+         a vararg parameter — the elements would be the map's entries, not its keys.
+      3. Overloaded names are skipped entirely: matching a call to the wrong member is noise.
+    """
+    signatures: dict[str, dict] = {}
+    return_types: dict[str, str] = {}
+    declaration_counts: dict[str, int] = {}
+    for path in files:
+        if path.suffix != ".kt":
+            continue
+        text = blank_out(path.read_text(encoding="utf-8", errors="replace"))
+        for match in re.finditer(
+            r"(?m)^\s*(?:private\s+|internal\s+|public\s+|protected\s+)*(?:inline\s+|suspend\s+)*fun\s+(\w+)\s*\(([^)]*)\)\s*(?::\s*([\w<>, .?]+))?",
+            text,
+        ):
+            name, params, return_type = match.group(1), match.group(2), match.group(3)
+            if name in ("if", "for", "while", "when", "return"):
+                continue
+            declaration_counts[name] = declaration_counts.get(name, 0) + 1
+            parts = split_parameters(params)
+            # A parameter with a default value is optional, so it does not raise the minimum.
+            required = [p for p in parts if "=" not in p and not p.startswith("vararg")]
+            has_vararg = any(p.startswith("vararg") for p in parts)
+            signatures[name] = {"fixed": len(required), "vararg": has_vararg, "file": path}
+            if return_type:
+                return_types[name] = return_type
+
+    # Rule 3: a name declared more than once is an overload set.
+    unambiguous = {name for name, count in declaration_counts.items() if count == 1}
+    signatures = {name: sig for name, sig in signatures.items() if name in unambiguous}
+    map_returning = {
+        name
+        for name, rt in return_types.items()
+        if name in unambiguous and (rt.startswith("Map<") or rt.startswith("MutableMap<"))
+    }
+
+    # Map-producing expressions that must never land in a vararg slot. Stdlib constructors are
+    # included because they are the ones a marshalling helper gets handed by mistake.
+    MAP_SOURCES = (
+        "mapOf(", "mutableMapOf(", "hashMapOf(", "linkedMapOf(", "sortedMapOf(",
+        "buildMap(", "buildMutableMap(", ".toMap()", ".toMutableMap()",
+    )
+
+    for path in files:
+        if path.suffix != ".kt":
+            continue
+        text = blank_out(path.read_text(encoding="utf-8", errors="replace"))
+        for match in re.finditer(r"(?<![\w.])(\w+)\s*\(", text):
+            name = match.group(1)
+            if name not in signatures:
+                continue
+            args, ok = read_call_arguments(text, match.end())
+            if not ok:
+                continue
+            signature = signatures[name]
+            line = text[: match.start()].count("\n") + 1
+            if len(args) < signature["fixed"]:
+                problems.append(
+                    f"{path.relative_to(ROOT)}:{line}: call to {name}() passes {len(args)} "
+                    f"argument(s) but it declares {signature['fixed']} required parameter(s)"
+                )
+            if signature["vararg"]:
+                for arg in args:
+                    stripped = arg.strip()
+                    if stripped.startswith("*"):
+                        continue  # an explicit spread is the correct form
+                    inner = re.match(r"^(\w+)\s*\(", stripped)
+                    if (inner and inner.group(1) in map_returning) or any(
+                        source in stripped for source in MAP_SOURCES
+                    ):
+                        problems.append(
+                            f"{path.relative_to(ROOT)}:{line}: {name}() takes vararg, but the "
+                            f"argument is a map ({stripped[:40]})"
+                        )
+
+
+def read_call_arguments(text: str, start: int) -> tuple[list[str], bool]:
+    """Split a call's argument list at the top nesting level."""
+    depth = 1
+    current = []
+    args: list[str] = []
+    index = start
+    while index < len(text) and depth > 0:
+        char = text[index]
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth -= 1
+            if depth == 0:
+                break
+        if char == "," and depth == 1:
+            args.append("".join(current))
+            current = []
+        else:
+            current.append(char)
+        index += 1
+    if depth != 0:
+        return [], False
+    if current:
+        args.append("".join(current))
+    return [arg for arg in args if arg.strip()], True
+
+
 def main() -> int:
     files = kotlin_files()
     if not files:
@@ -269,6 +411,7 @@ def main() -> int:
                 )
 
     check_member_access(ROOT, problems)
+    check_call_arity(problems, files)
     check_jni_parity(problems)
 
     if problems:

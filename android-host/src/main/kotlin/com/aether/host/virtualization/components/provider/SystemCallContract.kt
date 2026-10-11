@@ -88,9 +88,14 @@ object SystemCallContract {
         return Validation.Accepted(entry)
     }
 
-    /** Builds the response Bundle payload for a rejected call, as a key/value map. */
+    /**
+     * Builds the response payload for a rejected call.
+     *
+     * A list of pairs rather than a map: the provider marshals these straight into a Bundle,
+     * and a map would have to be converted at the call site for no gain.
+     */
     @JvmStatic
-    fun rejectionPayload(reason: String): Map<String, String> = mapOf(
+    fun rejectionPayload(reason: String): List<Pair<String, String>> = listOf(
         KEY_OK to "false",
         KEY_ERROR to reason,
     )
