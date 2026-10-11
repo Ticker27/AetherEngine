@@ -14,6 +14,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.aether.guest.api.GuestEntryPoint
 import com.aether.host.AetherApplication
 import com.aether.host.bootstrap.HostInitializer
+import com.aether.host.virtualization.activity.CooperativeFixtureController
 import com.aether.host.virtualization.activity.ProxyActivityP0
 import com.aether.host.virtualization.flags.HostFeature
 import com.aether.host.virtualization.flags.flagger
@@ -28,6 +29,11 @@ import org.junit.runner.RunWith
 /**
  * Cooperative first-party fixture lifecycle tests. These do NOT attach a third-party Activity;
  * they exercise only the fixture entry point hosted by [ProxyActivityP0].
+ *
+ * ActivityScenario applies `FLAG_ACTIVITY_NEW_TASK | FLAG_ACTIVITY_CLEAR_TASK` to every launch
+ * intent, so a second scenario yields the first one: the host proxy slot is cleared and the hosted
+ * Activity is destroyed. Rejection is therefore asserted through the controller and through the
+ * second launch intent, never through a second live scenario.
  */
 @RunWith(AndroidJUnit4::class)
 class FixtureGuestLaunchTest {
@@ -102,18 +108,29 @@ class FixtureGuestLaunchTest {
     fun duplicateLaunchOfActiveTokenDoesNotRevokeOriginalSession() {
         val guest = loadFixtureGuest()
         val launchIntent = prepareLaunch(guest)
+        val token = checkNotNull(
+            launchIntent.getStringExtra(CooperativeFixtureController.EXTRA_TOKEN),
+        )
         ActivityScenario.launch<ProxyActivityP0>(launchIntent).use { original ->
             assertFixtureUiVisible(original)
-            // Reusing the same token while the lease is held must be rejected without touching
-            // the original session.
+
+            // While the lease is held, neither a second prepare nor a second owner can take it.
+            // Asserted against the controller directly, so the request never reaches the Activity.
+            instrumentation.runOnMainSync {
+                assertThrows(IllegalStateException::class.java) { host.fixtureController.prepare(guest) }
+                assertThrows(IllegalStateException::class.java) {
+                    host.fixtureController.create(token, "duplicate-owner", context, null)
+                }
+                assertTrue("Rejected attempts must leave the lease untouched", host.fixtureController.hasSession())
+            }
+            assertFixtureUiVisible(original)
+
+            // A second scenario is only exercised last: it applies FLAG_ACTIVITY_CLEAR_TASK, which
+            // clears the host task and ends the run above. The duplicate is still rejected in
+            // onCreate and finishes itself, which is what this asserts.
             ActivityScenario.launch<ProxyActivityP0>(Intent(launchIntent)).use { duplicate ->
-                // The duplicate is rejected during onCreate and finishes itself, so the scenario
-                // reports DESTROYED. onActivity() is unusable here: it throws whenever the tracked
-                // instance has already reached DESTROYED.
                 assertEquals(Lifecycle.State.DESTROYED, duplicate.state)
             }
-            instrumentation.runOnMainSync { assertTrue(host.fixtureController.hasSession()) }
-            assertFixtureUiVisible(original)
         }
         instrumentation.runOnMainSync { assertFalse(host.fixtureController.hasSession()) }
     }
