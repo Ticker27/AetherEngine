@@ -80,6 +80,37 @@ represents only the pinned external target. The fixture does not alter `TargetAp
 - ARM64 connected instrumentation run: **pending device/runner**.
 - S1 is not marked complete until the instrumentation result is recorded on an ARM64 target.
 
+### Host capability surface (added against the reference target)
+
+The reference host exposes four capabilities this engine previously stubbed. They are now
+implemented, each as a pure policy object plus a thin component, and each gated by its own
+feature flag that defaults to disabled:
+
+| Capability | Policy (unit-tested) | Component | Flag |
+| --- | --- | --- | --- |
+| Internal RPC entry | `SystemCallContract` | `SystemCallProvider.call()` | `SYSTEM_CALL_IPC` |
+| Bounded keep-alive | `DaemonRestartPolicy` | `DaemonService.onTaskRemoved` | `DAEMON_KEEPALIVE` |
+| Guest traffic tunnel | `VpnRoutePolicy` | `ProxyVpnService` | `PROXY_VPN_SERVICE` |
+| Descriptor reflection | `HostReflectionAllowlist` | `MethodUtils` descriptor tier | `REFLECTIVE_FRAMEWORK_ACCESS` |
+
+Deliberate differences from the reference target:
+
+1. `SystemCallProvider` stays `exported="false"` with authority `${applicationId}.system.internal`.
+   The reference host exports it unguarded, which turns `call()` into a remote entry point.
+2. The RPC method table is closed and validated before dispatch; the native bridge never receives
+   a caller-supplied method name.
+3. Keep-alive is bounded: a sliding restart window with exponential backoff, so a user who keeps
+   swiping the task away eventually wins.
+4. The reflection allowlist starts empty. Descriptor lookup fails closed; widening it is a
+   reviewable act, never a side effect of a new caller.
+5. The VPN route policy validates before any `Builder` call, excludes the host package from its
+   own tunnel, and requires explicit user consent.
+
+The JNI lane gained `dispatchRequest` so the provider can reach the native `MessageBridge`;
+`verify_host_structure.py` now asserts the Kotlin facade and the C++ registration table declare
+exactly the same method set, and `native_tests.sh` compiles the registry on the host so that
+drift cannot reach a device as a `LinkageError`.
+
 ## S2 — Guest package model
 
 After S1 is green, parse the verified fixture manifest into an immutable `GuestPackage`, persist it

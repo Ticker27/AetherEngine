@@ -35,12 +35,17 @@ REQUIRED_FILES = [
     "android-host/src/main/kotlin/com/aether/host/virtualization/components/provider/FileProvider.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/components/provider/ProxyContentProvider.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/components/provider/SystemCallProvider.kt",
+    "android-host/src/main/kotlin/com/aether/host/virtualization/components/provider/SystemCallContract.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/components/service/DaemonService.kt",
+    "android-host/src/main/kotlin/com/aether/host/virtualization/components/service/DaemonRestartPolicy.kt",
+    "android-host/src/main/kotlin/com/aether/host/virtualization/components/service/VpnRoutePolicy.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/components/service/ProxyJobService.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/components/service/ProxyService.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/components/service/ProxyVpnService.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/flags/flagger.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/util/MethodUtils.kt",
+    "android-host/src/main/kotlin/com/aether/host/virtualization/util/ReflectionDescriptor.kt",
+    "android-host/src/main/kotlin/com/aether/host/virtualization/util/HostReflectionAllowlist.kt",
     "android-host/src/main/kotlin/com/aether/host/virtualization/web/InternalWebBrowser.kt",
     "android-host/src/main/res/xml/aether_file_paths.xml",
     "android-host/src/main/res/values/styles.xml",
@@ -62,6 +67,13 @@ REQUIRED_FILES = [
     "android-host/src/test/kotlin/com/aether/host/bootstrap/VirtualActivitySlotRegistryTest.kt",
     "android-host/src/test/kotlin/com/aether/host/virtualization/loader/GuestClassLoaderProxyTest.kt",
     "android-host/src/test/kotlin/com/aether/host/virtualization/filesystem/GuestVirtualFileSystemTest.kt",
+    "android-host/src/test/kotlin/com/aether/host/virtualization/util/ReflectionDescriptorTest.kt",
+    "android-host/src/test/kotlin/com/aether/host/virtualization/util/HostReflectionAllowlistTest.kt",
+    "android-host/src/test/kotlin/com/aether/host/virtualization/util/MethodUtilsTest.kt",
+    "android-host/src/test/kotlin/com/aether/host/virtualization/components/provider/SystemCallContractTest.kt",
+    "android-host/src/test/kotlin/com/aether/host/virtualization/components/service/DaemonRestartPolicyTest.kt",
+    "android-host/src/test/kotlin/com/aether/host/virtualization/components/service/VpnRoutePolicyTest.kt",
+    "android-host/src/test/kotlin/com/aether/host/virtualization/flags/FlaggerTest.kt",
     "android-host/src/main/kotlin/com/aether/host/MainActivity.kt",
     "fixture-guest/build.gradle.kts",
     "fixture-guest/src/main/AndroidManifest.xml",
@@ -269,6 +281,98 @@ def main() -> None:
         fail("Native facade Kotlin package is not the expected bridge package")
     if 'com/aether/host/bridge/Native' not in registry_source:
         fail("JNI registry class path does not match the Native Kotlin package")
+
+    # The JNI lane must stay a closed loop: every external Kotlin declaration has exactly one
+    # registered entry, and every registered entry has exactly one declaration. A drift in either
+    # direction is a LinkageError at runtime or an unreachable native method.
+    kotlin_externals = set(re.findall(r'external fun (\w+)\(', native_source))
+    jni_registrations = set(re.findall(r'\{"(\w+)", "', registry_source))
+    if not kotlin_externals:
+        fail("Native.kt declares no external methods")
+    if kotlin_externals != jni_registrations:
+        missing = sorted(kotlin_externals - jni_registrations)
+        orphaned = sorted(jni_registrations - kotlin_externals)
+        fail(
+            "JNI registry and Native.kt disagree: "
+            f"unregistered={missing} orphaned={orphaned}"
+        )
+    if "dispatchRequest" not in kotlin_externals:
+        fail("Native.kt must declare dispatchRequest for the system-call RPC entry")
+    for method in kotlin_externals:
+        if f'"{method}", "' not in registry_source:
+            fail(f"JNI descriptor for {method} is missing from native_registry.cpp")
+
+    # Feature flags: every capability must be gated and must default to disabled. A new flag that
+    # is declared but never read is dead code; one that is read without a gate is a hole.
+    flagger_source = (ROOT / "android-host/src/main/kotlin/com/aether/host/virtualization/flags/flagger.kt").read_text()
+    flag_names = re.findall(r'^\s{4}([A-Z_]+),$', flagger_source, re.MULTILINE)
+    if len(flag_names) < 8:
+        fail(f"HostFeature must declare the full capability set, found {len(flag_names)}: {flag_names}")
+    for required_flag in (
+        "DYNAMIC_APK_LOADING",
+        "COOPERATIVE_FIXTURE_UI",
+        "PROXY_VPN_SERVICE",
+        "INTERNAL_WEB_BROWSER",
+        "SYSTEM_CALL_IPC",
+        "DAEMON_KEEPALIVE",
+        "REFLECTIVE_FRAMEWORK_ACCESS",
+        "SLOT_RESTART",
+    ):
+        if required_flag not in flag_names:
+            fail(f"HostFeature is missing the gated capability {required_flag}")
+    host_sources = [
+        path.read_text()
+        for path in (ROOT / "android-host/src/main/kotlin/com/aether/host").rglob("*.kt")
+    ]
+    for flag in flag_names:
+        readers = sum(1 for source in host_sources if f"HostFeature.{flag}" in source)
+        if readers == 0:
+            fail(f"HostFeature.{flag} is declared but never read; a flag nobody checks is not a gate")
+
+    # The reflection boundary: descriptor lookup must fail closed on an empty allowlist.
+    allowlist_source = (
+        ROOT / "android-host/src/main/kotlin/com/aether/host/virtualization/util/HostReflectionAllowlist.kt"
+    ).read_text()
+    if "private val entries: List<Entry> = emptyList()" not in allowlist_source:
+        fail("HostReflectionAllowlist must start from an empty, closed table")
+    method_utils_source = (
+        ROOT / "android-host/src/main/kotlin/com/aether/host/virtualization/util/MethodUtils.kt"
+    ).read_text()
+    if "findAllowedMethod" not in method_utils_source:
+        fail("MethodUtils must expose the allowlist-gated descriptor lookup")
+    if "HostReflectionAllowlist" not in method_utils_source:
+        fail("MethodUtils descriptor tier must consult HostReflectionAllowlist")
+
+    # Keep-alive must be bounded; an unbounded onTaskRemoved restart is a battery anti-pattern.
+    daemon_source = (
+        ROOT / "android-host/src/main/kotlin/com/aether/host/virtualization/components/service/DaemonService.kt"
+    ).read_text()
+    if "onTaskRemoved" not in daemon_source:
+        fail("DaemonService must handle onTaskRemoved")
+    if "DaemonRestartPolicy" not in daemon_source:
+        fail("DaemonService keep-alive must be bounded by DaemonRestartPolicy")
+    if "START_STICKY" in daemon_source and "DAEMON_KEEPALIVE" not in daemon_source:
+        fail("DaemonService sticky restart must be gated by DAEMON_KEEPALIVE")
+
+    # The VPN route decision must validate before any Builder call.
+    vpn_source = (
+        ROOT / "android-host/src/main/kotlin/com/aether/host/virtualization/components/service/ProxyVpnService.kt"
+    ).read_text()
+    if "VpnRoutePolicy" not in vpn_source:
+        fail("ProxyVpnService must route through VpnRoutePolicy")
+    if "VpnService.prepare" not in vpn_source:
+        fail("ProxyVpnService must require explicit user VPN consent")
+    if "addDisallowedApplication" not in vpn_source:
+        fail("ProxyVpnService must exclude the host package from its own tunnel")
+
+    # The RPC contract must be closed and the provider must stay unexported.
+    contract_source = (
+        ROOT / "android-host/src/main/kotlin/com/aether/host/virtualization/components/provider/SystemCallContract.kt"
+    ).read_text()
+    if "bridgeMethodFor" not in contract_source:
+        fail("SystemCallContract must map reviewed names to bridge methods")
+    if "Validation.Rejected" not in contract_source:
+        fail("SystemCallContract must reject unknown methods before dispatch")
 
     fixture_gradle = (ROOT / "fixture-guest/build.gradle.kts").read_text()
     fixture_manifest = ET.parse(FIXTURE_MANIFEST_PATH).getroot()

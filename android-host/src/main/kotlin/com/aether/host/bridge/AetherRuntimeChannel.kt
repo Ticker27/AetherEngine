@@ -1,6 +1,7 @@
 package com.aether.host.bridge
 
 import com.aether.host.bootstrap.HostInitializer
+import com.aether.host.virtualization.components.provider.SystemCallContract
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -40,6 +41,21 @@ class AetherRuntimeChannel(
                     result.success(null)
                 }
                 "ping" -> result.success("pong:${Native.runtimeState()}")
+                "dispatch" -> {
+                    val method = call.argument<String>("method")
+                    val payload = call.argument<String>("payload") ?: "{}"
+                    // The method name must be one the host has reviewed; the contract owns the
+                    // table and the native bridge never sees a caller-supplied name.
+                    if (!SystemCallContract.isAccepted(method)) {
+                        result.error(
+                            ERROR_UNKNOWN_METHOD,
+                            "method is not in the host system-call contract",
+                            method,
+                        )
+                        return@setMethodCallHandler
+                    }
+                    result.success(Native.dispatchRequest(checkNotNull(method), payload))
+                }
                 else -> result.notImplemented()
             }
         } catch (error: LinkageError) {
@@ -61,5 +77,6 @@ class AetherRuntimeChannel(
         const val CHANNEL_NAME = "aether/runtime"
         private const val ERROR_NATIVE_LINK = "UNSATISFIED_LINK"
         private const val ERROR_NATIVE_CALL = "NATIVE_ERROR"
+        private const val ERROR_UNKNOWN_METHOD = "UNKNOWN_METHOD"
     }
 }

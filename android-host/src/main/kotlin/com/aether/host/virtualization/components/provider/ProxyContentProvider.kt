@@ -56,7 +56,8 @@ abstract class ProxyContentProvider : ContentProvider() {
         return 0
     }
 
-    private fun dispatch(event: String, uri: Uri) {
+    /** Lifecycle fan-out for this provider. Visible to subclasses, invisible outside the module. */
+    protected fun dispatch(event: String, uri: Uri) {
         val app = context?.applicationContext as? AetherApplication ?: return
         app.hostInitializer.dispatch(
             HostComponentEvent(

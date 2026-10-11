@@ -41,4 +41,15 @@ echo "== native smoke demo (state machine + dispatcher + message bridge) =="
 "$OUT/native_smoke_demo"
 
 echo ""
+echo "== JNI registry compile check (no NDK: compat jni.h) =="
+# native_registry.cpp is the only translation unit that the Android build compiles but the
+# host-side suite does not, so a signature drift between the Kotlin facade and the C++ table
+# would otherwise only surface as a LinkageError on a device. Compile it here instead.
+# shellcheck disable=SC2086
+"$CXX" -std=c++17 -fsyntax-only $INCLUDES \
+    aether-native/src/main/cpp/jni/native_registry.cpp \
+    aether-native/src/main/cpp/jni/jni_onload.cpp
+echo "JNI registry compiles clean."
+
+echo ""
 echo "Native test suite passed."

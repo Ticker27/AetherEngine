@@ -2,7 +2,9 @@
 #include "../common/logging.h"
 #include "../runtime/runtime_state.h"
 #include "../bridge/engine_bridge.h"
+#include "../bridge/message_bridge.h"
 #include "../platform/thread_dispatcher.h"
+#include <cstdint>
 #include <string>
 
 namespace {
@@ -67,6 +69,42 @@ jstring nativeRuntimeState(JNIEnv* env, jobject /*thiz*/) {
     }
 }
 
+// Dispatch binding — routes a host-reviewed method name into MessageBridge.
+// The caller (SystemCallContract) has already validated the name against its closed table, so
+// the native side treats it as an internal identifier, never as free-form input.
+jstring nativeDispatchRequest(JNIEnv* env, jobject /*thiz*/, jstring method, jstring payload) {
+    if (method == nullptr || payload == nullptr) {
+        return env->NewStringUTF("{\"ok\":false,\"error\":\"missing method or payload\"}");
+    }
+    try {
+        const char* methodChars = env->GetStringUTFChars(method, nullptr);
+        const char* payloadChars = env->GetStringUTFChars(payload, nullptr);
+        if (methodChars == nullptr || payloadChars == nullptr) {
+            if (methodChars != nullptr) env->ReleaseStringUTFChars(method, methodChars);
+            if (payloadChars != nullptr) env->ReleaseStringUTFChars(payload, payloadChars);
+            return env->NewStringUTF("{\"ok\":false,\"error\":\"utf conversion failed\"}");
+        }
+
+        bridge::MessageRequest request;
+        request.method = methodChars;
+        request.payloadJson = payloadChars;
+        // The request id is assigned here, never by the caller: a caller-supplied id would let a
+        // client correlate or replay another client's request.
+        request.requestId = std::to_string(reinterpret_cast<uintptr_t>(&request));
+
+        bridge::MessageResponse response = bridge::MessageBridge::Instance().Handle(request);
+
+        env->ReleaseStringUTFChars(method, methodChars);
+        env->ReleaseStringUTFChars(payload, payloadChars);
+
+        std::string json = response.ToJson();
+        return env->NewStringUTF(json.c_str());
+    } catch (...) {
+        AETHER_LOGE("nativeDispatchRequest exception");
+        return env->NewStringUTF("{\"ok\":false,\"error\":\"native dispatch failed\"}");
+    }
+}
+
 // Current registration table for com.aether.host.bridge.Native.
 // Keep this table in sync with the compiled Kotlin declaration and JNI descriptors.
 JNINativeMethod kMethods[] = {
@@ -77,6 +115,10 @@ JNINativeMethod kMethods[] = {
     // Runtime bindings
     {"getVersion", "()Ljava/lang/String;", reinterpret_cast<void*>(nativeGetVersion)},
     {"runtimeState", "()Ljava/lang/String;", reinterpret_cast<void*>(nativeRuntimeState)},
+
+    // Dispatch binding
+    {"dispatchRequest", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
+     reinterpret_cast<void*>(nativeDispatchRequest)},
 };
 
 constexpr char kNativeClass[] = "com/aether/host/bridge/Native";

@@ -3,6 +3,14 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Keep-alive: the foreground service is only ever started with DAEMON_KEEPALIVE on,
+         and it carries a dataSync type. No wake-lock or boot receiver is requested. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <!-- The restart after onTaskRemoved is an AlarmManager elapsed-realtime wakeup; exact
+         alarms are deliberately NOT requested, so the platform may batch it. -->
+
     <application
         android:name=".AetherApplication"
         android:allowBackup="false"
@@ -60,8 +68,16 @@
             android:enabled="true"
             android:exported="false" />
 
-        <service android:name="com.aether.host.virtualization.components.service.DaemonService" android:exported="false" />
-        <service android:name="com.aether.host.virtualization.components.service.DaemonInnerService" android:exported="false" />
+        <!-- Keep-alive daemon. Non-exported, no permission required to bind from the host's own
+             UID. The foreground promotion and the bounded restart are feature-gated at runtime. -->
+        <service
+            android:name="com.aether.host.virtualization.components.service.DaemonService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+        <service
+            android:name="com.aether.host.virtualization.components.service.DaemonInnerService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <service android:name="com.aether.host.virtualization.components.service.ProxyServiceP0" android:exported="false" />
         <service android:name="com.aether.host.virtualization.components.service.ProxyServiceP1" android:exported="false" />
@@ -102,7 +118,14 @@
         <provider android:name="com.aether.host.virtualization.components.provider.ProxyContentProviderP1" android:authorities="${applicationId}.guest.provider.p1" android:exported="false" />
         <provider android:name="com.aether.host.virtualization.components.provider.ProxyContentProviderP2" android:authorities="${applicationId}.guest.provider.p2" android:exported="false" />
         <provider android:name="com.aether.host.virtualization.components.provider.ProxyContentProviderP3" android:authorities="${applicationId}.guest.provider.p3" android:exported="false" />
-        <provider android:name="com.aether.host.virtualization.components.provider.SystemCallProvider" android:authorities="${applicationId}.system.internal" android:exported="false" />
+        <!-- Internal RPC entry. Non-exported: only the host's own UID can call it. The accepted
+             method table is closed (SystemCallContract) and the whole surface is feature-gated by
+             SYSTEM_CALL_IPC. A shipping virtualization host usually exports this unguarded; that
+             turns it into a remote entry point into the engine, so this host does not. -->
+        <provider
+            android:name="com.aether.host.virtualization.components.provider.SystemCallProvider"
+            android:authorities="${applicationId}.system.internal"
+            android:exported="false" />
 
     </application>
 </manifest>

@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">AetherEngine</string>
+
+    <!-- Keep-alive foreground notification. Only ever shown with DAEMON_KEEPALIVE enabled. -->
+    <string name="daemon_channel_name">Aether host keep-alive</string>
+    <string name="daemon_notification_title">AetherEngine</string>
+    <string name="daemon_notification_text">Host runtime is staying available.</string>
 </resources>
