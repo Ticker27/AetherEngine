@@ -52,6 +52,18 @@ public final class Native {
     public static native void i(int config);                        // int config ของ engine (sig (I)V)
     public static native void pjowqpxe(Object a, Object b, Object c); // 3-arg sink (sig (LOO)V)
 
+    // ── env: ตั้ง HOME ให้ guest loader (ctor chain ใช้ getenv("HOME")+"%s/Library") ──
+    public static void setEnv(String k, String v) {
+        if (!sLoaded) return;
+        try {
+            setEnvNative(k, v);
+        } catch (Throwable t) {
+            android.util.Log.w("AetherEngine", "setEnv: " + t);
+        }
+    }
+
+    private static native void setEnvNative(String k, String v);
+
     // ── pure Java (parity: gcuid เป็น Java ล้วนในต้นแบบ) ─────────
     public static int gcuid(int seed) {
         int h = seed ^ 0x5F3759DF;                      // (ต้นแบบใช้ค่าคงที่กลางๆ ประดิษฐ์เอง — คงกลไก เปลี่ยนค่า)

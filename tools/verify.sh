@@ -1,6 +1,6 @@
 #!/bin/sh
 # AetherEngine — local verify gate (รันก่อน push ทุกครั้ง)
-# ต้องมี: android.jar + flutter stubs ที่ $AETHER_SDK (ค่าเริ่มต้น /var/minis/workspace/aether-tools/sdk)
+# ต้องมี: android.jar + flutter stubs ที่ $AETHER_SDK
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 AE="$ROOT"
@@ -48,6 +48,17 @@ rt=set(re.findall(r'case "(\w)":', open('android/app/src/main/java/com/aether/Co
 dt=set(re.findall(r"dispatch\('(\w)'", open('lib/core/engine_channel.dart').read()))
 assert dt <= rt, (dt - rt)
 print('   OK', sorted(rt))
+PY
+echo "== 6b) native names: java <-> cpp table =="
+python3 - <<'PY'
+import re
+java=open('android/app/src/main/java/com/aether/helper/Native.java').read()
+nat=set(re.findall(r'native\s+[\w\[\]]+\s+(\w+)\s*\(', java))
+cpp=open('android/app/src/main/cpp/aether.cpp').read()
+tbl=set(re.findall(r'\(\s*char\s*\*\s*\)\s*"(\w+)"', cpp.split('gMethods[] = {')[1].split('};')[0]))
+assert tbl <= nat, ('table not in java:', tbl - nat)
+assert nat <= tbl, ('java natives not in table:', nat - tbl)
+print('   OK', sorted(nat))
 PY
 echo "== 6) no hidden-class imports =="
 if rg -n 'import android\.(app\.ActivityThread|os\.Process);' android/app/src/main/java; then echo '   FAIL'; exit 1; else echo '   OK'; fi

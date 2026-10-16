@@ -21,8 +21,13 @@ public final class ContentCache {
     private ContentCache() {}
 
     public static File dir(Context c) {
-        File d = new File(c.getFilesDir(), "files");
+        File base = c.getFilesDir();
+        if (!base.exists()) base.mkdirs();
+        File d = new File(base, "files");
         if (!d.exists()) d.mkdirs();
+        if (!d.isDirectory()) {
+            android.util.Log.w("AetherEngine", "cache dir unavailable: " + d);
+        }
         return d;
     }
 

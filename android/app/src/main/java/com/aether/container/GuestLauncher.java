@@ -148,6 +148,17 @@ public final class GuestLauncher {
                 android.util.Log.w(TAG, "guest resources inject skipped: " + t);
             }
 
+            // 5a) เตรียม environment ให้ guest loader: HOME ของ sandbox + <HOME>/Library (ctor chain ใช้ getenv("HOME"))
+            try {
+                File home = SandboxStore.guestUserDataDir(host, pkg);
+                com.aether.helper.Native.setEnv("HOME", home.getAbsolutePath());
+                File lib = new File(home, "Library");
+                if (!lib.exists()) lib.mkdirs();
+                android.util.Log.i(TAG, "guest HOME=" + home + " (Library ready)");
+            } catch (Throwable t) {
+                android.util.Log.w(TAG, "guest HOME setup: " + t);
+            }
+
             // 5b) guest ApplicationInfo — ชี้ทุก dir เข้า sandbox (Unity/IL2CPP ใช้ค่านี้)
             android.content.pm.ApplicationInfo guestAi = null;
             try {

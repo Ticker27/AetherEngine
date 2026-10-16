@@ -13,6 +13,7 @@
 //   - license/token payload ใน blob → ไม่มี (blob เป็น engine config ทั่วไป)
 
 #include <jni.h>
+#include <cstdlib>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -177,6 +178,18 @@ static void pjowqpxeImpl(JNIEnv *, jclass, jobject a, jobject b, jobject c) {
          a ? "obj" : "null", b ? "obj" : "null", c ? "obj" : "null");
 }
 
+// ── setEnv: ตั้ง environment variable ของ process (ใช้ตั้ง HOME ให้ guest loader) ──
+static void setEnvImpl(JNIEnv *env, jclass, jstring k, jstring v) {
+    const char *ck = k ? env->GetStringUTFChars(k, nullptr) : nullptr;
+    const char *cv = v ? env->GetStringUTFChars(v, nullptr) : nullptr;
+    if (ck && cv) {
+        int r = setenv(ck, cv, 1);
+        LOGI("setenv %s=%s -> %d", ck, cv, r);
+    }
+    if (ck) env->ReleaseStringUTFChars(k, ck);
+    if (cv) env->ReleaseStringUTFChars(v, cv);
+}
+
 // ── JNI_OnLoad: RegisterNatives (parity: ต้นแบบไม่มี Java_* export — ผูกตอน load เท่านั้น) ──
 static JNINativeMethod gMethods[] = {
     {(char *)"ic",   (char *)"(Landroid/content/Context;)V",            (void *)icImpl},
@@ -189,6 +202,7 @@ static JNINativeMethod gMethods[] = {
     {(char *)"ac",   (char *)"(Ljava/lang/Object;Ljava/lang/Object;)V", (void *)acImpl},
     {(char *)"i",    (char *)"(I)V",                                    (void *)iImpl},
     {(char *)"pjowqpxe", (char *)"(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V", (void *)pjowqpxeImpl},
+    {(char *)"setEnvNative", (char *)"(Ljava/lang/String;Ljava/lang/String;)V",            (void *)setEnvImpl},
 };
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *) {
