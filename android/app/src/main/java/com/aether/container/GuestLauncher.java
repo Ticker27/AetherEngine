@@ -150,6 +150,7 @@ public final class GuestLauncher {
                 if (c != 0) {
                     DisplayMetrics dm = host.getResources().getDisplayMetrics();
                     guestRes = new Resources(am, dm, host.getResources().getConfiguration());
+                    android.util.Log.i(TAG, "guest resources injected (cookie=" + c + ")");
                 }
             } catch (Throwable t) {
                 android.util.Log.w(TAG, "guest resources inject skipped: " + t);
@@ -172,6 +173,10 @@ public final class GuestLauncher {
             } catch (Throwable t) {
                 android.util.Log.w(TAG, "guest appInfo build failed: " + t);
             }
+
+            // 6a) boot guest Application (packer init ของเกม — ต้องมาก่อน Activity) + module (ถ้ามี)
+            bootGuestApplication(host, gm, guestLoader, guestRes, guestAi, pkg, libDir);
+            loadModuleIfPresent(guestLoader, libDir);
 
             // 6) สร้าง + attach + onCreate (reflection; adapter ตาม signature ของ API)
             Activity guest;
@@ -214,6 +219,56 @@ public final class GuestLauncher {
             }
         } catch (Throwable t) {
             return "container:launch-error:" + describe(t);
+        }
+    }
+
+    /** boot guest Application: attachBaseContext(GuestContext) + onCreate — จุดที่ packer โหลด native ของเกม */
+    private static void bootGuestApplication(Activity host, GuestManifest gm, ClassLoader loader,
+                                             Resources guestRes, android.content.pm.ApplicationInfo guestAi,
+                                             String pkg, File libDir) {
+        String appName = gm.applicationName;
+        if (appName == null || appName.isEmpty()) {
+            android.util.Log.i(TAG, "guest app: (no application class)");
+            return;
+        }
+        String full = appName.startsWith(".") ? gm.packageName + appName : appName;
+        try {
+            Class<?> appCls = loader.loadClass(full);
+            android.app.Application guestApp =
+                    (android.app.Application) appCls.getDeclaredConstructor().newInstance();
+            android.content.Context guestCtx = new GuestContext(host, pkg, guestAi, loader, guestRes,
+                    SandboxStore.guestUserDataDir(host, pkg));
+            java.lang.reflect.Method attach =
+                    android.content.ContextWrapper.class.getDeclaredMethod("attachBaseContext",
+                            android.content.Context.class);
+            attach.setAccessible(true);
+            attach.invoke(guestApp, guestCtx);
+            guestApp.onCreate();
+            android.util.Log.i(TAG, "guest application booted: " + full);
+        } catch (Throwable t) {
+            android.util.Log.w(TAG, "guest application boot failed (" + full + ")", t);
+        }
+    }
+
+    /** โหลด module .so ของ guest (ถ้ามี) เข้า guest loader — parity: module ของแบบจำลอง */
+    private static void loadModuleIfPresent(ClassLoader guestLoader, File libDir) {
+        File mod = new File(libDir, "libgame-module.so");
+        if (!mod.exists()) return;
+        try {
+            java.lang.reflect.Method load0 = Runtime.class.getDeclaredMethod(
+                    "load0", ClassLoader.class, String.class);
+            load0.setAccessible(true);
+            Object target = java.lang.reflect.Modifier.isStatic(load0.getModifiers())
+                    ? null : Runtime.getRuntime();
+            load0.invoke(target, guestLoader, mod.getAbsolutePath());
+            android.util.Log.i(TAG, "module loaded (guest loader): " + mod);
+        } catch (Throwable t) {
+            try {
+                System.load(mod.getAbsolutePath());
+                android.util.Log.i(TAG, "module loaded (host loader): " + mod);
+            } catch (Throwable t2) {
+                android.util.Log.w(TAG, "module load failed: " + t2);
+            }
         }
     }
 

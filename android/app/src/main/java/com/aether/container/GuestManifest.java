@@ -18,11 +18,13 @@ import java.util.zip.ZipFile;
 final class GuestManifest {
 
     final String packageName;
+    final String applicationName;
     final String launcherActivity;
     final List<String> activities;
 
-    private GuestManifest(String pkg, String launcher, List<String> acts) {
+    private GuestManifest(String pkg, String appName, String launcher, List<String> acts) {
         this.packageName = pkg;
+        this.applicationName = appName;
         this.launcherActivity = launcher;
         this.activities = acts;
     }
@@ -61,6 +63,7 @@ final class GuestManifest {
         if (b.length < 8 || u16(b, 0) != 0x0003) throw new IllegalStateException("not axml");
         String[] pool = null;
         String pkg = null;
+        String appName = null;
         String launcher = null;
         List<String> acts = new ArrayList<>();
         String curActivity = null;
@@ -116,6 +119,9 @@ final class GuestManifest {
                     if ("name".equals(an) && av != null) { aName = av; }
                     if ("package".equals(an) && av != null && pkg == null) { pkg = av; }
                 }
+                if ("application".equals(name) && aName != null && appName == null) {
+                    appName = aName;
+                }
                 if ("activity".equals(name) && aName != null) {
                     acts.add(aName);
                     curActivity = aName;
@@ -142,6 +148,6 @@ final class GuestManifest {
             off += size;
         }
         if (pkg == null) throw new IllegalStateException("no package name");
-        return new GuestManifest(pkg, launcher, acts);
+        return new GuestManifest(pkg, appName, launcher, acts);
     }
 }
