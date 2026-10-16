@@ -15,7 +15,7 @@ Launcher
   └─► App.onCreate()
         ├─ AetherCore.postInit(ctx) # อ่าน container registry
         └─ log engine version
-  └─► MainActivity.onCreate()
+  └─► Entry.onCreate()
         ├─ a0() ขอ POST_NOTIFICATIONS (API 33+, requestCode 1002)
         ├─ b0() ตรวจ notification channel ของ engine (channel id com.aether.engine)
         └─ ผูกปุ่ม UI → CommandRouter.dispatch(code, arg)
@@ -53,7 +53,7 @@ Launcher
 
 ```
 Main process (com.aether)                :helper process
-├─ App / MainActivity                    ├─ SystemCallProvider (exported, call("VM", …))
+├─ App / Entry                    ├─ SystemCallProvider (exported, call("VM", …))
 ├─ VStubActivity                         │    └─ ตอบ Bundle + Binder (_S_|_server_)
 └─ (UI + dispatcher)                     └─ DaemonService
                                               ├─ NotificationChannel "com.aether.engine"

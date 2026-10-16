@@ -30,7 +30,7 @@ public class SystemCallProvider extends ContentProvider {
 
     @Override
     public boolean onCreate() {
-        // ต้นแบบ: engine core.h().w() + core service init (container framework ของแบบจำลอง provider-bridge init)
+        // แบบจำลอง: core init + provider-bridge init ของ container framework
         android.util.Log.i("AetherEngine", "SystemCallProvider.onCreate (:helper)");
         return true;
     }

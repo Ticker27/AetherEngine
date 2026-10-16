@@ -8,6 +8,8 @@ import android.os.Bundle;
 
 import androidx.annotation.NonNull;
 
+import com.aether.helper.DaemonService;
+
 import io.flutter.embedding.android.FlutterActivity;
 import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.plugin.common.MethodChannel;
@@ -72,7 +74,7 @@ public class Entry extends FlutterActivity {
 
     private void b0() {
         android.app.NotificationManager nm = getSystemService(android.app.NotificationManager.class);
-        android.app.NotificationChannel ch = nm.getNotificationChannel(helper.DaemonService.CHANNEL_ID);
+        android.app.NotificationChannel ch = nm.getNotificationChannel(DaemonService.CHANNEL_ID);
         android.util.Log.i("AetherEngine", "Entry.onCreate: channel=" + (ch != null ? ch.getImportance() : "absent"));
     }
 }

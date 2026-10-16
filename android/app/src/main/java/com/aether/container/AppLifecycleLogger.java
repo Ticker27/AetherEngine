@@ -4,7 +4,7 @@ import android.app.Activity;
 import android.os.Bundle;
 
 /**
- * ต่อยอดจากโครงต้นแบบ: ต้นฉบับเก็บ callback ผ่าน engine core.h().f(ctx, new App$a(this))
+ * ต่อยอดจากโครงต้นแบบ: ต้นฉบับเก็บ lifecycle callback ผ่าน core.registerLifecycle(...)
  * AetherEngine: lifecycle logger จับ create/resume ของ activity ทุกตัวที่ผ่าน container
  */
 class AppLifecycleLogger implements android.app.Application.ActivityLifecycleCallbacks {

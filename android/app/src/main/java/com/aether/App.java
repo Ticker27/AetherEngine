@@ -10,13 +10,13 @@ import com.aether.helper.Native;
  * parity: Application entry ของแบบจำลอง
  *
  * ต้นแบบ:
- *   attachBaseContext() { super; core init; engine core.h().f(ctx, cb); }
+ *   attachBaseContext() { super; core init; core callback register; }
  *   onCreate()          { super; core post-init; }
  *
  * AetherEngine:
  *   attachBaseContext() → AetherCore.init(this)  ตามด้วย Native.ic(Context) = JNI init hook
  *   onCreate()          → AetherCore.postInit(this)
- * ตัดออก: Firebase init (a0()), notification channel setup ย้ายไปเรียกเมื่อเปิด MainActivity
+ * หมายเหตุ: analytics ไม่มีในโปรเจกต์นี้; ตรวจ notification channel อยู่ใน Entry.onCreate()
  */
 public class App extends android.app.Application {
 
@@ -30,7 +30,7 @@ public class App extends android.app.Application {
     @Override
     public void onCreate() {
         super.onCreate();
-        AetherCore.postInit(this);      // parity: engine core.h().g()
+        AetherCore.postInit(this);      // parity: core post-init
         Log.i("AetherEngine", "App.onCreate: engine=" + AetherCore.engineVersion());
     }
 }
