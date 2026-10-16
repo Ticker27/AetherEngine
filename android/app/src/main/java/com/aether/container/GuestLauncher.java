@@ -166,11 +166,14 @@ public final class GuestLauncher {
                 android.util.Log.w(TAG, "guest appInfo build failed: " + t);
             }
 
-            // 6a) boot guest providers → Application (ลำดับเดียวกับ framework จริง: providers มาก่อน Application)
+            // 6a) ลำดับเดียวกับ framework จริง: createApp+attachBaseContext → providers → onCreate
+            ProcessAdoption.adoptStatic(host, pkg, guestAi, guestLoader,
+                    SandboxStore.guestApk(host, pkg).getAbsolutePath());
             android.content.Context guestCtx = new GuestContext(host, pkg, guestAi, guestLoader, guestRes,
                     SandboxStore.guestUserDataDir(host, pkg));
+            android.app.Application guestApp = attachGuestApplication(gm, guestLoader, guestCtx);
             bootGuestProviders(gm, guestLoader, guestCtx, guestAi, pkg);
-            bootGuestApplication(host, gm, guestLoader, guestCtx, guestAi, pkg);
+            finishGuestApplication(gm, guestCtx, guestApp);
             loadModuleIfPresent(guestLoader, libDir);
 
             // 6) สร้าง + attach + onCreate (reflection; adapter ตาม signature ของ API)
@@ -276,21 +279,16 @@ public final class GuestLauncher {
         }
     }
 
-    /** boot guest Application: attachBaseContext(GuestContext) + onCreate — จุดที่ packer โหลด native ของเกม */
-    private static void bootGuestApplication(Activity host, GuestManifest gm, ClassLoader loader,
-                                             android.content.Context guestCtx,
-                                             android.content.pm.ApplicationInfo guestAi, String pkg) {
+    /** ขั้นที่ 1 ของ Application: สร้าง + attachBaseContext (framework ทำก่อน providers เสมอ) */
+    private static android.app.Application attachGuestApplication(GuestManifest gm, ClassLoader loader,
+                                                                  android.content.Context guestCtx) {
         String appName = gm.applicationName;
         if (appName == null || appName.isEmpty()) {
             android.util.Log.i(TAG, "guest app: (no application class)");
-            return;
+            return null;
         }
         String full = appName.startsWith(".") ? gm.packageName + appName : appName;
         try {
-            // ยึดตัวตน process ก่อน (เฉพาะ :p0) — ให้ packer เห็นเป็นเกม
-            ProcessAdoption.adoptStatic(host, pkg, guestAi, loader,
-                    SandboxStore.guestApk(host, pkg).getAbsolutePath());
-
             Class<?> appCls = loader.loadClass(full);
             android.app.Application guestApp =
                     (android.app.Application) appCls.getDeclaredConstructor().newInstance();
@@ -299,11 +297,24 @@ public final class GuestLauncher {
                             android.content.Context.class);
             attach.setAccessible(true);
             attach.invoke(guestApp, guestCtx);
+            android.util.Log.i(TAG, "guest application attached: " + full);
+            return guestApp;
+        } catch (Throwable t) {
+            android.util.Log.w(TAG, "guest application attach failed (" + full + ")", t);
+            return null;
+        }
+    }
+
+    /** ขั้นที่ 2 ของ Application: onCreate + ผูก instance เข้าระบบ (หลัง providers) */
+    private static void finishGuestApplication(GuestManifest gm, android.content.Context guestCtx,
+                                               android.app.Application guestApp) {
+        if (guestApp == null) return;
+        try {
             guestApp.onCreate();
             ProcessAdoption.adoptApplication(guestApp);
-            android.util.Log.i(TAG, "guest application booted: " + full);
+            android.util.Log.i(TAG, "guest application booted: " + gm.applicationName);
         } catch (Throwable t) {
-            android.util.Log.w(TAG, "guest application boot failed (" + full + ")", t);
+            android.util.Log.w(TAG, "guest application onCreate failed", t);
         }
     }
 
