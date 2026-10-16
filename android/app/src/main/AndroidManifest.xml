@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- AetherEngine manifest — โครงสร้างมาจาก แบบจำลองอ้างอิง (container engine) (แบบจำลองอ้างอิง) ฉบับลดความซับซ้อน
-     ตัดออก: 180 permissions → 7, VPN, Firebase, Proxy P0-P3 ×4 process, FileProvider/badge libs -->
+<!-- AetherEngine manifest — โครงเต็มรูปแบบตามแบบจำลองอ้างอิง (ตัดเฉพาะระบบ login key) -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- parity กับความจำเป็นของ container + keep-alive mechanism เท่านั้น -->
+    <!-- ชุดสิทธิ์ตามความสามารถของ container/keep-alive (ยังไม่รวมชุดเต็มใน phase นี้) -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -13,39 +12,45 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
-        android:name="com.aether.App"
+        android:name=".App"
         android:label="@string/app_name"
         android:icon="@android:drawable/sym_def_app_icon"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:allowBackup="false"
         android:usesCleartextTraffic="false">
 
-        <!-- parity: com.Entry (FlutterActivity) → MainActivity + CommandRouter -->
+        <!-- Flutter host (LAUNCHER) — parity: com.Entry (FlutterActivity) -->
         <activity
-            android:name="com.aether.MainActivity"
+            android:name=".Entry"
             android:exported="true"
             android:launchMode="singleTop"
-            android:screenOrientation="portrait">
+            android:screenOrientation="portrait"
+            android:theme="@style/LaunchTheme"
+            android:configChanges="locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density|layoutDirection|colorMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- parity: ProxyActivity$P0 → stub เปิดแอปใน container (1 process แทน :p0-p3) -->
+        <!-- stub เปิดแอปใน container -->
         <activity
             android:name="com.aether.container.VStubActivity"
             android:exported="false"
             android:configChanges="locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density|layoutDirection|colorMode" />
 
-        <!-- parity: SystemCallProvider ของแบบจำลอง (:helper, exported) -->
+        <!-- :helper process — IPC bridge -->
         <provider
             android:name="com.aether.helper.SystemCallProvider"
             android:authorities="com.aether.helper.SystemCallProvider"
             android:process=":helper"
             android:exported="true" />
 
-        <!-- parity: DaemonService + DaemonInnerService (:helper, foreground keep-alive) -->
+        <!-- :helper process — keep-alive daemon -->
         <service
             android:name="com.aether.helper.DaemonService"
             android:process=":helper"
@@ -59,5 +64,9 @@
             android:name="com.aether.helper.DaemonInnerService"
             android:process=":helper"
             android:exported="false" />
+
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
     </application>
 </manifest>
