@@ -250,6 +250,10 @@ public final class GuestLauncher {
         }
         String full = appName.startsWith(".") ? gm.packageName + appName : appName;
         try {
+            // ยึดตัวตน process ก่อน (เฉพาะ :p0) — ให้ packer เห็นเป็นเกม
+            ProcessAdoption.adoptStatic(host, pkg, guestAi, loader,
+                    SandboxStore.guestApk(host, pkg).getAbsolutePath());
+
             Class<?> appCls = loader.loadClass(full);
             android.app.Application guestApp =
                     (android.app.Application) appCls.getDeclaredConstructor().newInstance();
@@ -261,6 +265,7 @@ public final class GuestLauncher {
             attach.setAccessible(true);
             attach.invoke(guestApp, guestCtx);
             guestApp.onCreate();
+            ProcessAdoption.adoptApplication(guestApp);
             android.util.Log.i(TAG, "guest application booted: " + full);
         } catch (Throwable t) {
             android.util.Log.w(TAG, "guest application boot failed (" + full + ")", t);
