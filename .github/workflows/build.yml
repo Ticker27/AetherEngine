@@ -62,11 +62,18 @@ jobs:
           APK=$(ls build/app/outputs/flutter-apk/*.apk | head -1)
           rm -rf /tmp/so && mkdir -p /tmp/so
           unzip -o -q "$APK" 'lib/arm64-v8a/libaether.so' -d /tmp/so
-          fail=0
-          for m in chl djp ac awl i eio aior ic ilil pjowqpxe; do
-            if strings /tmp/so/lib/arm64-v8a/libaether.so | grep -qx "$m"; then echo "OK   $m"; else echo "MISS $m"; fail=1; fi
-          done
-          exit $fail
+          python3 - <<'PY'
+          import sys
+          data = open('/tmp/so/lib/arm64-v8a/libaether.so', 'rb').read()
+          fail = 0
+          for m in ['chl', 'djp', 'ac', 'awl', 'i', 'eio', 'aior', 'ic', 'ilil', 'pjowqpxe']:
+              if b'\x00' + m.encode() + b'\x00' in data:
+                  print('OK  ', m)
+              else:
+                  print('MISS', m)
+                  fail = 1
+          sys.exit(fail)
+          PY
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
