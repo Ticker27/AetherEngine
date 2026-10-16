@@ -8,7 +8,7 @@ class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
 
   static const List<(IconData, String, String)> _links = <(IconData, String, String)>[
-    (Icons.discuss, 'Discord', 'https://discord.com/'),
+    (Icons.forum, 'Discord', 'https://discord.com/'),
     (Icons.send, 'Telegram', 'https://t.me/'),
     (Icons.facebook, 'Facebook', 'https://www.facebook.com/'),
     (Icons.chat_bubble_outline, 'WhatsApp', 'https://wa.me/'),
