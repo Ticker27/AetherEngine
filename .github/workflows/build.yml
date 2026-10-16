@@ -20,8 +20,8 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK (accept licenses)
-        uses: android-actions/setup-android@v3
+      # runner ubuntu-latest มี Android SDK (+ licenses) ติดตั้งอยู่แล้ว — ไม่ต้อง setup-android
+      # ถ้า platform/build-tools ที่ต้องการไม่มี Gradle จะดาวน์โหลดเองผ่าน sdkmanager ที่ accept ไว้
 
       - name: Set up Gradle 8.7
         uses: gradle/actions/setup-gradle@v3
