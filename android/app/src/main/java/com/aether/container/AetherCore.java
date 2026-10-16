@@ -146,6 +146,7 @@ public final class AetherCore {
                     int n;
                     while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
                 }
+                VPackageInstaller.markReadOnly(dst);   // Android ≥14: dex ที่เขียนได้โหลดไม่ได้
                 JSONObject setting = new JSONObject();
                 setting.put("apkPath", dst.getAbsolutePath());
                 setting.put("versionName", pi.versionName == null ? "?" : pi.versionName);

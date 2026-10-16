@@ -32,12 +32,40 @@ public final class GuestLauncher {
 
     public static final String TAG = "AetherEngine";
 
+    private static boolean sBypassTried = false;
+
+    /** เปิด hiddenapi exemptions เพื่อให้ reflection แตะ method ของ framework ได้
+     *  (double-reflection ผ่าน VMRuntime.setHiddenApiExemptions — เทคนิคที่ framework plugin ใช้กันทั่วไป)
+     *  ถ้าไม่สำเร็จ → ไม่เป็นไร ดำเนินต่อและรายงาน stage ที่ไปถึง */
+    private static synchronized void tryHiddenApiBypass() {
+        if (sBypassTried) return;
+        sBypassTried = true;
+        try {
+            java.lang.reflect.Method forName = Class.class.getDeclaredMethod("forName", String.class);
+            java.lang.reflect.Method getDeclaredMethod =
+                    Class.class.getDeclaredMethod("getDeclaredMethod", String.class, Class[].class);
+            Class<?> vmRuntime = (Class<?>) forName.invoke(null, "dalvik.system.VMRuntime");
+            java.lang.reflect.Method getRuntime = (java.lang.reflect.Method)
+                    getDeclaredMethod.invoke(vmRuntime, "getRuntime", (Object) null);
+            Object runtime = getRuntime.invoke(null);
+            java.lang.reflect.Method setExemptions = (java.lang.reflect.Method)
+                    getDeclaredMethod.invoke(vmRuntime, "setHiddenApiExemptions", String[].class);
+            setExemptions.invoke(runtime, (Object) new String[]{"L"});
+            android.util.Log.i(TAG, "hiddenapi exemptions set");
+        } catch (Throwable t) {
+            android.util.Log.w(TAG, "hiddenapi bypass unavailable (เดินต่อ): " + t);
+        }
+    }
+
     private GuestLauncher() {}
 
     /** @return status string ของการ launch ใน container */
     public static String launchInto(Activity host, String pkg) {
+        tryHiddenApiBypass();
+
         File apk = SandboxStore.guestApk(host, pkg);
         if (!apk.exists()) return "container:not-installed(sandbox apk missing)";
+        if (apk.canWrite()) VPackageInstaller.markReadOnly(apk);   // กัน SecurityException บน Android ≥14
 
         try {
             // 2) manifest ของ guest → launcher class

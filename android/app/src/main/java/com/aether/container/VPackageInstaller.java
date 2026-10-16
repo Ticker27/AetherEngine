@@ -62,6 +62,7 @@ final class VPackageInstaller {
                 int n;
                 while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
             }
+            markReadOnly(dst);   // Android ≥14: dex ที่เขียนได้โหลดไม่ได้
 
             // 3+4) pin check
             TargetRegistry.Target t = TargetRegistry.byPkg(pkg);
@@ -110,6 +111,20 @@ final class VPackageInstaller {
             return "ERR:" + e.getMessage();
         } finally {
             if (tmp != null) tmp.delete();
+        }
+    }
+
+    /** Android ≥14: PathClassLoader ปฏิเสธ dex ที่เขียนได้ — ต้อง mark read-only ก่อนโหลด */
+    static void markReadOnly(File f) {
+        try {
+            if (!f.setReadOnly()) {
+                // สำรอง: ตัด write bit ตรง ๆ
+                //noinspection ResultOfMethodCallIgnored
+                f.setWritable(false, false);
+            }
+            android.util.Log.i("AetherEngine", "apk read-only: " + f.getName() + " writable=" + f.canWrite());
+        } catch (Exception e) {
+            android.util.Log.w("AetherEngine", "setReadOnly: " + e.getMessage());
         }
     }
 
