@@ -72,6 +72,19 @@ Main process (com.aether)                 :helper process
 :p3   ProxyActivity$P3/P3L · ProxyService$P3 · ProxyContentProvider$P3 · ProxyJobService$P3
 ```
 
+## 4b. Dart UI (A4)
+
+```
+RootShell (NavigationBar)
+├─ Home      : engine console (codes 0/A/B/D/F/L/I/J/K) + container list (G) + launch (M)
+├─ Settings  : ภาษา (EN/Filipino/Melayu/Español) · device info (L) · keep-alive/network notes
+└─ About     : เวอร์ชัน · community links (E → browser)
+
+i18n  : lib/i18n/l10n.dart — ตารางข้อความ 4 ภาษา (ไม่พึ่ง package ภายนอก)
+net   : lib/net/api_client.dart — HttpClient พร้อม findProxy จาก http_proxy/NO_PROXY (ไม่มี endpoint)
+icons : ใช้ Material icons แทน svg assets (ลด dependency — จุดต่างเชิงโครงสร้างเล็กน้อย)
+```
+
 ## 5. Container
 
 ```

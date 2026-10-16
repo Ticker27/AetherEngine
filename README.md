@@ -14,9 +14,11 @@
 ```
 AetherEngine/
 ├── lib/                          # Dart (Flutter UI + channel bridge)
-│   ├── main.dart
-│   ├── core/engine_channel.dart  # MethodChannel "com.aether/engine" — code table "0".."H"
-│   └── ui/home_page.dart
+│   ├── main.dart                 # RootShell: Home · Settings · About (NavigationBar)
+│   ├── core/engine_channel.dart  # MethodChannel "com.aether/engine" — code table "0".."M"
+│   ├── i18n/l10n.dart            # 4 ภาษา: EN · Filipino · Melayu · Español
+│   ├── net/api_client.dart       # proxy-aware HttpClient (http_proxy/NO_PROXY — ไม่มี endpoint)
+│   └── ui/                       # home (console+containers) · settings · about
 ├── android/
 │   ├── settings.gradle / build.gradle / gradle.properties
 │   ├── gradlew + gradle/wrapper/  (Gradle 8.7)
@@ -42,7 +44,7 @@ AetherEngine/
 |---|---|
 | Entry chain — Launcher → `App.attachBaseContext` (core init + `Native.ic`) → `App.onCreate` | `App.java`, `AetherCore.java` |
 | Flutter ↔ Java — `MethodChannel "com.aether/engine"`, method name = code ในตาราง | `Entry.java`, `lib/core/engine_channel.dart` |
-| Code table — `"0"` blob · `"A"` toast · `"B"`/`"D"` prefs · `"E"` url · `"F"` cached · `"G"` list · `"H"` install | `CommandRouter.java` |
+| Code table — `"0"` blob · `"A"` toast · `"B"`/`"D"` prefs · `"E"` url · `"F"` cached · `"G"` list · `"H"`/`"K"` install · `"I"` pick · `"J"` zip-share · `"L"` device · `"M"` launch | `CommandRouter.java` |
 | Native dynamic — ไม่มี `Java_*`; `JNI_OnLoad → RegisterNatives` (10 methods ตรง live table) | `aether.cpp` |
 | `ilil` multi-branch decryptor · `djp` blob table (`.rodata`) · `chl` CRC32 verifier | `aether.cpp` |
 | `:helper` — IPC bridge (`SystemCallProvider.call`) + keep-alive daemon (FGS + exact alarm) | `helper/*` |
@@ -64,6 +66,8 @@ AetherEngine/
 - **A2a** ✅ proxy `:p0–:p3` ครบ + VPN + permission battery + CI manifest gate
 - **A2b** ✅ browser ในแอป + zip share/provider + image picker/compress (codes I/J/K)
 - **A3** ✅ native เต็มชุด 10 methods + blob table ×4 + DeviceRegistry + gate native
-- **A4** คิวถัดไป: Dart UI เต็ม (container/settings/about + i18n + assets)
+- **A4** ✅ Dart UI เต็ม — Home (console + container list + launch) · Settings (ภาษา/เครื่อง) · About (ชุมชน) + i18n 4 ภาษา + proxy-aware client + code "M"
+
+> เสร็จครบ 4 เฟส — โครงเต็มรูปแบบ (ตัดเฉพาะระบบ login key) โดยทุกเฟสผ่าน CI gate
 
 > structural model เพื่อการศึกษา — ไม่ใช่ container framework เต็มรูป (ไม่ hook AMS/PMS) ดู [docs/DESIGN.md](docs/DESIGN.md)

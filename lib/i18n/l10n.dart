@@ -1,0 +1,137 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
+/// Locale ปัจจุบันของแอป (สลับได้จาก Settings)
+final ValueNotifier<Locale> appLocale = ValueNotifier<Locale>(const Locale('en'));
+
+/// ภาษาที่รองรับ — 4 ภาษาตามความสามารถของแบบจำลอง (อังกฤษ, ฟิลิปิโน, มาเลย์/อินโด, สเปน)
+const Map<String, String> supportedLanguages = <String, String>{
+  'en': 'English',
+  'fil': 'Filipino',
+  'ms': 'Bahasa Melayu',
+  'es': 'Español',
+};
+
+/// L10n — ตารางข้อความแบบเบา (ไม่พึ่ง package ภายนอก)
+class L10n {
+  final String code;
+  const L10n(this.code);
+
+  static L10n of(BuildContext context) => L10n(Localizations.localeOf(context).languageCode);
+
+  static const Map<String, Map<String, String>> _t = <String, Map<String, String>>{
+    'en': <String, String>{
+      'appTitle': 'AetherEngine',
+      'navHome': 'Home',
+      'navSettings': 'Settings',
+      'navAbout': 'About',
+      'engineConsole': 'Engine console',
+      'containers': 'Container apps',
+      'refresh': 'Refresh',
+      'noContainers': 'No container apps yet — install an APK to start.',
+      'installApk': 'Install APK',
+      'pickImage': 'Pick image (compress ≤10 KB)',
+      'zipShare': 'Zip & share demo file',
+      'pickApk': 'Pick APK',
+      'device': 'Device info',
+      'blob': 'Blob decrypt (djp)',
+      'prefsPut': 'Save demo setting',
+      'prefsGet': 'Read demo setting',
+      'cached': 'Cached string',
+      'language': 'Language',
+      'netProxy': 'Proxy-aware HTTP client: ready (no endpoints configured)',
+      'keepAlive': 'Engine keep-alive: foreground daemon on :helper',
+      'version': 'Version',
+      'links': 'Community',
+      'launch': 'Launch',
+      'launched': 'Launch requested',
+      'aboutBlurb': 'Android container-engine structural model.\nNo login key / license system.',
+    },
+    'fil': <String, String>{
+      'appTitle': 'AetherEngine',
+      'navHome': 'Home',
+      'navSettings': 'Settings',
+      'navAbout': 'Tungkol',
+      'engineConsole': 'Console ng engine',
+      'containers': 'Mga app sa container',
+      'refresh': 'I-refresh',
+      'noContainers': 'Wala pang app sa container — mag-install ng APK.',
+      'installApk': 'I-install ang APK',
+      'pickImage': 'Pumili ng larawan (≤10 KB)',
+      'zipShare': 'I-zip at i-share ang demo file',
+      'pickApk': 'Pumili ng APK',
+      'device': 'Impormasyon ng device',
+      'blob': 'Blob decrypt (djp)',
+      'prefsPut': 'I-save ang demo setting',
+      'prefsGet': 'Basahin ang demo setting',
+      'cached': 'Naka-cache na string',
+      'language': 'Wika',
+      'netProxy': 'Proxy-aware HTTP client: handa (walang endpoint)',
+      'keepAlive': 'Engine keep-alive: foreground daemon sa :helper',
+      'version': 'Bersyon',
+      'links': 'Komunidad',
+      'launch': 'Ilunsad',
+      'launched': 'Hiniling ang paglunsad',
+      'aboutBlurb': 'Structural model ng Android container engine.\nWalang login key / license system.',
+    },
+    'ms': <String, String>{
+      'appTitle': 'AetherEngine',
+      'navHome': 'Utama',
+      'navSettings': 'Tetapan',
+      'navAbout': 'Perihal',
+      'engineConsole': 'Konsol enjin',
+      'containers': 'Apl dalam kontena',
+      'refresh': 'Muat semula',
+      'noContainers': 'Belum ada apl kontena — pasang APK dahulu.',
+      'installApk': 'Pasang APK',
+      'pickImage': 'Pilih imej (≤10 KB)',
+      'zipShare': 'Zip & kongsi fail demo',
+      'pickApk': 'Pilih APK',
+      'device': 'Maklumat peranti',
+      'blob': 'Blob decrypt (djp)',
+      'prefsPut': 'Simpan tetapan demo',
+      'prefsGet': 'Baca tetapan demo',
+      'cached': 'Rentetan cache',
+      'language': 'Bahasa',
+      'netProxy': 'Klien HTTP sedar-proksi: sedia (tiada endpoint)',
+      'keepAlive': 'Keep-alive enjin: daemon foreground pada :helper',
+      'version': 'Versi',
+      'links': 'Komuniti',
+      'launch': 'Lancar',
+      'launched': 'Permintaan lancar dihantar',
+      'aboutBlurb': 'Model struktur enjin kontena Android.\nTiada sistem login key / lesen.',
+    },
+    'es': <String, String>{
+      'appTitle': 'AetherEngine',
+      'navHome': 'Inicio',
+      'navSettings': 'Ajustes',
+      'navAbout': 'Acerca de',
+      'engineConsole': 'Consola del motor',
+      'containers': 'Apps en contenedor',
+      'refresh': 'Actualizar',
+      'noContainers': 'Aún no hay apps — instala un APK para empezar.',
+      'installApk': 'Instalar APK',
+      'pickImage': 'Elegir imagen (≤10 KB)',
+      'zipShare': 'Comprimir y compartir archivo demo',
+      'pickApk': 'Elegir APK',
+      'device': 'Información del dispositivo',
+      'blob': 'Descifrar blob (djp)',
+      'prefsPut': 'Guardar ajuste demo',
+      'prefsGet': 'Leer ajuste demo',
+      'cached': 'Cadena en caché',
+      'language': 'Idioma',
+      'netProxy': 'Cliente HTTP con proxy: listo (sin endpoints)',
+      'keepAlive': 'Keep-alive del motor: daemon en :helper',
+      'version': 'Versión',
+      'links': 'Comunidad',
+      'launch': 'Iniciar',
+      'launched': 'Inicio solicitado',
+      'aboutBlurb': 'Modelo estructural de motor de contenedores Android.\nSin sistema de clave de acceso / licencia.',
+    },
+  };
+
+  String get(String key) => _t[code]?[key] ?? _t['en']![key] ?? key;
+
+  /// ใช้ locale ปัจจุบันจาก appLocale โดยตรง (ไม่พึ่ง Localizations resolution)
+  static L10n current() => L10n(appLocale.value.languageCode);
+}
