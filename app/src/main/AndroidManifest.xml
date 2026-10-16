@@ -36,7 +36,7 @@
         <activity
             android:name="com.aether.container.VStubActivity"
             android:exported="false"
-            android:configChanges="0x40003FB4" />
+            android:configChanges="locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density|layoutDirection|colorMode" />
 
         <!-- parity: SystemCallProvider ของแบบจำลอง (:helper, exported) -->
         <provider
