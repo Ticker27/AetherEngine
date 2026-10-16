@@ -167,6 +167,16 @@
             android:process=":helper"
             android:exported="false" />
 
+        <!-- parity: ProxyBroadcastReceiver (:helper, goAsync→core) — exported=false โดยเจตนา -->
+        <receiver
+            android:name="com.aether.helper.ProxyBroadcastReceiver"
+            android:process=":helper"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.aether.proxy.STUB_BROADCAST" />
+            </intent-filter>
+        </receiver>
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

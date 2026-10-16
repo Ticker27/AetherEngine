@@ -60,6 +60,7 @@ Launcher
 ```
 Main process (com.aether)                 :helper process
 ├─ App / Entry                            ├─ SystemCallProvider (exported, call("VM", …))
+├─ VStubActivity (container-only)         │  + ProxyBroadcastReceiver (goAsync → core)
 ├─ TransparentProxyActivity               │    └─ ตอบ Bundle + Binder (_S_|_server_)
 ├─ ProxyPendingActivity                   └─ DaemonService
 ├─ ProxyVpnService (BIND_VPN_SERVICE)         ├─ NotificationChannel "com.aether.engine"
@@ -126,7 +127,7 @@ Sandbox conf 6 ไฟล์ (parity): package.conf · uid.conf · user.conf · s
 | Defensive load | ✅ | `Native.isAvailable()` + `isAvailable` guard (pure-Java mode ถ้า .so โหลดไม่ได้) |
 | Native dynamic registration | ✅ ตรงโครง | ไม่มี `Java_*`; 10 methods + sig ตรงกับ live table ที่ยืนยันไว้ |
 | String/blob encryption | ✅ กลไกเดียวกัน (ขนาดเล็กกว่า) | XOR-stream decoder; ตารางเล็กใน `.rodata` |
-| Helper process + keep-alive | ✅ ตรงโครง | provider + FG daemon + inner + exact alarm |
+| Helper process + keep-alive | ✅ ตรงโครง | provider + FG daemon + inner + exact alarm + ProxyBroadcastReceiver |
 | Container install | ✅ A5 | parse→sandbox(sha256,self-record)→package.conf/uid.conf→content:// handoff |
 | Container launch | ✅ A5 (in-container) | PathClassLoader จาก sandbox apk + guest libDir + attach/onCreate — ไม่มี external fallback |
 | Target pin (56.31.0) | ✅ A5 | TargetRegistry + บล็อกเมื่อ version-mismatch (parity: สภาพล็อก) |
