@@ -11,7 +11,7 @@ public class ProxyJobService extends JobService {
 
     @Override
     public boolean onStartJob(JobParameters params) {
-        android.util.Log.i("AetherEngine", "ProxyJobService.onStartJob " + getLocalClassName()
+        android.util.Log.i("AetherEngine", "ProxyJobService.onStartJob " + getClass().getSimpleName()
                 + " job=" + params.getJobId());
         return false; // งานเสร็จทันทีใน structural model
     }

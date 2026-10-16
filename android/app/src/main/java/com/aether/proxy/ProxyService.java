@@ -13,14 +13,14 @@ public class ProxyService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        android.util.Log.i("AetherEngine", "ProxyService " + getLocalClassName()
+        android.util.Log.i("AetherEngine", "ProxyService " + getClass().getSimpleName()
                 + " action=" + (intent != null ? intent.getAction() : null));
         return START_NOT_STICKY;
     }
 
     @Override
     public IBinder onBind(Intent intent) {
-        android.util.Log.i("AetherEngine", "ProxyService.onBind " + getLocalClassName());
+        android.util.Log.i("AetherEngine", "ProxyService.onBind " + getClass().getSimpleName());
         return null;
     }
 
