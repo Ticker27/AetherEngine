@@ -31,7 +31,7 @@ public final class SandboxStore {
     }
 
     public static File guestDir(Context c, String pkg) {
-        return new File(new File(new File(root(c), "data/app")), pkg);
+        return new File(new File(root(c), "data/app"), pkg);
     }
 
     public static File guestApk(Context c, String pkg) {

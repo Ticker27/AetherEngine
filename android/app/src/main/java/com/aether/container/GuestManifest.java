@@ -19,11 +19,12 @@ final class GuestManifest {
 
     final String packageName;
     final String launcherActivity;
-    final List<String> activities = new ArrayList<>();
+    final List<String> activities;
 
-    private GuestManifest(String pkg, String launcher) {
+    private GuestManifest(String pkg, String launcher, List<String> acts) {
         this.packageName = pkg;
         this.launcherActivity = launcher;
+        this.activities = acts;
     }
 
     static GuestManifest parse(String apkPath) throws Exception {
@@ -61,6 +62,7 @@ final class GuestManifest {
         String[] pool = null;
         String pkg = null;
         String launcher = null;
+        List<String> acts = new ArrayList<>();
         String curActivity = null;
         boolean inFilter = false;
         boolean seenMain = false;
@@ -108,14 +110,14 @@ final class GuestManifest {
                 for (int i = 0; i < attrCount; i++) {
                     int ao = attrOff + i * 20;
                     int nIdx = u32(b, ao + 4);
-                    int rawIdx = u32(b, ao + 16);
+                    int rawIdx = u32(b, ao + 8);
                     String an = nIdx < pool.length ? pool[nIdx] : "";
                     String av = (rawIdx != 0xFFFFFFFF && rawIdx < pool.length) ? pool[rawIdx] : null;
                     if ("name".equals(an) && av != null) { aName = av; }
                     if ("package".equals(an) && av != null && pkg == null) { pkg = av; }
                 }
                 if ("activity".equals(name) && aName != null) {
-                    activities.add(aName);
+                    acts.add(aName);
                     curActivity = aName;
                     seenMain = false;
                     seenLauncher = false;
@@ -140,6 +142,6 @@ final class GuestManifest {
             off += size;
         }
         if (pkg == null) throw new IllegalStateException("no package name");
-        return new GuestManifest(pkg, launcher);
+        return new GuestManifest(pkg, launcher, acts);
     }
 }

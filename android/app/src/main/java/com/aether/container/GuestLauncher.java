@@ -102,7 +102,10 @@ public final class GuestLauncher {
             }
 
             try {
-                guest.onCreate(null);
+                // onCreate เป็น protected — ต้อง invoke ผ่าน reflection
+                java.lang.reflect.Method oc = Activity.class.getDeclaredMethod("onCreate", android.os.Bundle.class);
+                oc.setAccessible(true);
+                oc.invoke(guest, (Object) null);
             } catch (Throwable t) {
                 return "container:guest-onCreate-failed:" + t;
             }
