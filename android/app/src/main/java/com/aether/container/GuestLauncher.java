@@ -54,16 +54,8 @@ public final class GuestLauncher {
                     String name = e.getName();
                     if (!name.startsWith("lib/arm64-v8a/") || !name.endsWith(".so")) continue;
                     File out = new File(libDir, name.substring(name.lastIndexOf('/') + 1));
-                    try (java.io.InputStream in = zf.getInputStream(e);
-                         java.io.FileOutputStream os = new java.io.FileOutputStream(out)) {
-                        byte[] buf = new byte[65536];
-                        int r;
-                        while ((r = in.read(buf)) > 0) os.write(buf, 0, r);
-                        n++; total += out.length();
-                    } catch (Throwable fileErr) {
-                        failed++;   // ไฟล์เดียวพัง ต้องไม่ล้มทั้งชุด
-                        android.util.Log.w(TAG, "native extract skip " + out.getName() + ": " + fileErr);
-                    }
+                    if (copyEntry(zf, e, out)) { n++; total += out.length(); }
+                    else { failed++; }   // ไฟล์เดียวพัง ต้องไม่ล้มทั้งชุด
                 }
             }
             android.util.Log.i(TAG, "guest natives extracted: " + n + " ok, " + failed + " failed, "
@@ -220,6 +212,31 @@ public final class GuestLauncher {
         } catch (Throwable t) {
             return "container:launch-error:" + describe(t);
         }
+    }
+
+    /** copy 1 entry → ไฟล์ (retry: ลบไฟล์ค้าง, setWritable, สุดท้าย log) */
+    private static boolean copyEntry(java.util.zip.ZipFile zf, java.util.zip.ZipEntry e, File out) {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try (java.io.InputStream in = zf.getInputStream(e);
+                 java.io.FileOutputStream os = new java.io.FileOutputStream(out)) {
+                byte[] buf = new byte[65536];
+                int r;
+                while ((r = in.read(buf)) > 0) os.write(buf, 0, r);
+                return true;
+            } catch (Throwable t) {
+                if (attempt == 0 && out.exists() && !out.delete()) {
+                    android.util.Log.w(TAG, "native extract: cannot delete stale " + out.getName());
+                }
+                if (attempt == 1) {
+                    //noinspection ResultOfMethodCallIgnored
+                    out.getParentFile().setWritable(true, false);
+                }
+                if (attempt == 2) {
+                    android.util.Log.w(TAG, "native extract skip " + out.getName() + ": " + t);
+                }
+            }
+        }
+        return false;
     }
 
     /** boot guest Application: attachBaseContext(GuestContext) + onCreate — จุดที่ packer โหลด native ของเกม */
