@@ -44,9 +44,9 @@ public final class GuestLauncher {
     /** แตก lib/*.so ของ guest จาก APK → sandbox lib dir (Unity/IL2CPP หา nativeLibraryDir) */
     private static void prepareGuestNatives(File apk, File libDir) {
         try {
-            File[] have = libDir.listFiles();
-            if (have != null && have.length > 0) return;   // ทำครั้งเดียว
-            int n = 0; long total = 0;
+            File[] have = libDir.listFiles((d, f) -> f.endsWith(".so"));
+            if (have != null && have.length > 0) return;   // ทำครั้งเดียว (นับเฉพาะ .so)
+            int n = 0, failed = 0; long total = 0;
             try (java.util.zip.ZipFile zf = new java.util.zip.ZipFile(apk)) {
                 java.util.Enumeration<? extends java.util.zip.ZipEntry> en = zf.entries();
                 while (en.hasMoreElements()) {
@@ -59,11 +59,15 @@ public final class GuestLauncher {
                         byte[] buf = new byte[65536];
                         int r;
                         while ((r = in.read(buf)) > 0) os.write(buf, 0, r);
+                        n++; total += out.length();
+                    } catch (Throwable fileErr) {
+                        failed++;   // ไฟล์เดียวพัง ต้องไม่ล้มทั้งชุด
+                        android.util.Log.w(TAG, "native extract skip " + out.getName() + ": " + fileErr);
                     }
-                    n++; total += out.length();
                 }
             }
-            android.util.Log.i(TAG, "guest natives extracted: " + n + " lib(s), " + (total / 1024 / 1024) + " MB → " + libDir);
+            android.util.Log.i(TAG, "guest natives extracted: " + n + " ok, " + failed + " failed, "
+                    + (total / 1024 / 1024) + " MB → " + libDir);
         } catch (Throwable t) {
             android.util.Log.w(TAG, "native extract failed: " + t);
         }

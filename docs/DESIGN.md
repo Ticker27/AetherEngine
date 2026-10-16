@@ -123,6 +123,21 @@ Data layer (parity):
 
 ---
 
+## 6. Guest launch ladder — ชั้นที่พิสูจน์ได้จริงบนอุปกรณ์ (2026-10-16)
+
+```
+[✓] install 56.31.0 → sandbox (sha256/package.conf/uid=10000)        log: install: … pin=match uid=10000
+[✓] sandbox tree ตาม layout จริง (system confs · data/app/<pkg>/{base.apk,lib,package.conf} · user[_de] · proc · cache)
+[✓] launch ใน container เท่านั้น (ไม่มี external fallback)            log: VStub(...) → …
+[✓] guest class จาก sandbox: com.miniclip.eightballpool.EightBallPoolActivity   (stack: EightBallPoolActivity.onCreate)
+[✓] attach ผ่าน reflection (19-param signature)
+[✓] แตก native libs ของ guest: 20 libs / 102 MB (รวม libgame-BPM-…-Module-4035.so 85.5 MB)
+[✓] guest onCreate ถึง native init ของตัวเกม → qwerty.asdfgh.zxcvbn.lkjhgf()
+[✗] ขอบเขตที่เหลือ: native init ของเกมเอง (packer/anti-tamper ของเกม) ต้อง
+    replicate framework-level hooks เพิ่ม: LoadedApk/Application forgery, PMS/AMS proxy,
+    ลำดับ preload ของ module — เทียบเท่าแกนของ VA framework เต็มรูป
+```
+
 ## Level of parity
 
 | ชั้น | สถานะ | หมายเหตุ |
