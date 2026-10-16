@@ -1,5 +1,7 @@
 package com.aether.helper;
 
+import android.content.Context;
+
 /**
  * parity: Native bridge ของแบบจำลอง (JNI bridge ผูกผ่าน RegisterNatives)
  *
