@@ -70,9 +70,10 @@ final class ProcessAdoption {
         } catch (Throwable t) {
             android.util.Log.w("AetherEngine", "adoptStatic failed: " + t);
         }
-        // เปลี่ยน cmdline ของ process เป็นชื่อเกม (public API)
+        // เปลี่ยน cmdline ของ process เป็นชื่อเกม (setArgV0 เป็น @hide — ใช้ reflection)
         try {
-            android.os.Process.setArgV0(pkg);
+            Method m = android.os.Process.class.getMethod("setArgV0", String.class);
+            m.invoke(null, pkg);
             android.util.Log.i("AetherEngine", "adopt: setArgV0(" + pkg + ")");
         } catch (Throwable t) {
             android.util.Log.w("AetherEngine", "adopt: setArgV0 failed: " + t);
