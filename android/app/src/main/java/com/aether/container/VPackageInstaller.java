@@ -5,75 +5,112 @@ import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.net.Uri;
-import android.provider.OpenableColumns;
+
+import com.aether.share.AetherFileProvider;
 
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.security.MessageDigest;
 
 /**
- * parity: container installer ของแบบจำลอง — install APK เข้า container
+ * VPackageInstaller — ไปป์ไลน์ติดตั้งเป้าหมายเข้า sandbox (โครงเดียวกับแบบจำลอง §1)
  *
- * ต้นแบบ: คัดลอก APK ของแอปเป้าหมายมาใส่ virtual storage แล้ว register ใน virtual package manager
- *   โดย disable launcher ของแอปเดิม (clone ล่องหน)
- * AetherEngine: คัดลอก APK เข้า filesDir/containers/ + จด registry — และแจ้งผู้ใช้ผ่าน ACTION_VIEW
- *   ทาง PackageInstaller ของระบบ (มี REQUEST_INSTALL_PACKAGES ไว้ตาม parity) — แต่ไม่ลบ/hide แอปเดิม
+ * ขั้นตอน (parity: install gate → copy → PackageSetting → uid):
+ *   1. copy APK เข้า temp → getPackageArchiveInfo (pkg/version)
+ *   2. copy เข้า sandbox: root/data/app/<pkg>/base.apk
+ *   3. คำนวณ sha256 (parity: entry "versionName@sha256" — self-record เพราะไม่มี C2)
+ *   4. เทียบ pin กับ TargetRegistry (8BP = 56.31.0) → pin=match|mismatch(want=…)
+ *   5. เขียน root/data/system/package.conf (PackageSetting + states) + uid.conf (alloc uid)
+ *   6. เตรียม root/data/user/0/<pkg>/lib (ที่วาง module .so)
+ *   7. ส่งต่อ system installer ด้วย content:// (แก้ case file:// FileUriExposedException)
  */
 final class VPackageInstaller {
 
     private VPackageInstaller() {}
 
-    static void install(Context ctx, Uri apkUri) {
+    static String install(Context ctx, Uri apkUri) {
+        File tmp = null;
         try {
-            File dir = new File(ctx.getFilesDir(), "containers");
-            if (!dir.exists()) dir.mkdirs();
+            SandboxStore.ensureBaseLayout(ctx);
 
-            String name = queryName(ctx, apkUri);
-            if (name == null || name.isEmpty()) name = "container_" + System.currentTimeMillis() + ".apk";
-            File out = new File(dir, name);
-            copy(ctx.getContentResolver().openInputStream(apkUri), out);
+            // 1) temp copy เพื่อ parse
+            tmp = new File(ctx.getCacheDir(), "incoming_" + System.currentTimeMillis() + ".apk");
+            copy(ctx.getContentResolver().openInputStream(apkUri), tmp);
 
             PackageManager pm = ctx.getPackageManager();
-            PackageInfo pi = pm.getPackageArchiveInfo(out.getAbsolutePath(), 0);
-            if (pi == null) {
-                android.util.Log.w("AetherEngine", "install: ไม่ใช่ APK ที่อ่านได้");
-                return;
+            PackageInfo pi = pm.getPackageArchiveInfo(tmp.getAbsolutePath(),
+                    PackageManager.GET_SIGNING_CERTIFICATES);
+            if (pi == null) return "ERR:not-an-apk";
+
+            String pkg = pi.packageName;
+            String version = pi.versionName == null ? "?" : pi.versionName;
+            long vCode = pi.getLongVersionCode();
+            String sha = sha256(tmp);
+
+            // 2) เข้า sandbox root
+            File dst = SandboxStore.guestApk(ctx, pkg);
+            File dir = dst.getParentFile();
+            if (dir != null && !dir.exists()) dir.mkdirs();
+            try (InputStream in = new FileInputStream(tmp);
+                 OutputStream out = new FileOutputStream(dst)) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
             }
 
-            // register เข้า container registry (parity: virtual package manager)
-            JSONObject entry = new JSONObject();
-            entry.put("pkg", pi.packageName);
-            entry.put("version", pi.versionName);
-            entry.put("apk", out.getAbsolutePath());
-            entry.put("installedAt", System.currentTimeMillis());
-            AetherCore.addToRegistry(ctx, entry);
+            // 3+4) pin check
+            TargetRegistry.Target t = TargetRegistry.byPkg(pkg);
+            String pin;
+            if (t == null) {
+                pin = "n/a";
+            } else {
+                pin = version.equals(t.pinVersion)
+                        ? "match"
+                        : "mismatch(want=" + t.pinVersion + ")";
+            }
 
-            // parity: ต้นแบบใช้ s2 (VirtualInstaller) ติดตั้งใน virtual space — ที่นี่ส่งต่อ system installer
+            // 5) conf files
+            JSONObject setting = new JSONObject();
+            setting.put("apkPath", dst.getAbsolutePath());
+            setting.put("versionName", version);
+            setting.put("versionCode", vCode);
+            setting.put("sha256", sha);
+            setting.put("installedAt", System.currentTimeMillis());
+            setting.put("pin", pin);
+            JSONObject states = new JSONObject();
+            states.put("installed", true);
+            states.put("stopped", false);
+            states.put("hidden", false);
+            states.put("launched", false);
+            setting.put("states", states);
+            SandboxStore.writePackageSetting(ctx, pkg, setting);
+            int uid = SandboxStore.allocUid(ctx, pkg);
+            SandboxStore.guestLibDir(ctx, pkg);
+
+            // 6) handoff → system installer (content:// เท่านั้น)
             Intent it = new Intent(Intent.ACTION_VIEW);
-            it.setDataAndType(Uri.fromFile(out), "application/vnd.android.package-archive");
+            it.setDataAndType(AetherFileProvider.uriForGuest(pkg), "application/vnd.android.package-archive");
             it.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
             try {
                 ctx.startActivity(it);
             } catch (Exception e) {
-                android.util.Log.i("AetherEngine", "install: system installer not shown (" + e.getMessage()
-                        + ") — APK เก็บไว้ที่ " + out.getAbsolutePath());
+                android.util.Log.w("AetherEngine", "installer handoff: " + e.getMessage());
             }
-        } catch (Exception e) {
-            android.util.Log.w("AetherEngine", "install failed: " + e.getMessage());
-        }
-    }
 
-    private static String queryName(Context ctx, Uri uri) {
-        try (android.database.Cursor c = ctx.getContentResolver().query(uri, null, null, null, null)) {
-            if (c != null && c.moveToFirst()) {
-                int idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME);
-                if (idx >= 0) return c.getString(idx);
-            }
-        } catch (Exception ignored) {}
-        return null;
+            android.util.Log.i("AetherEngine", "install: " + pkg + "@" + version + " pin=" + pin
+                    + " uid=" + uid + " sandbox=" + dst.getAbsolutePath());
+            return "installed:" + pkg + "@" + version + " pin=" + pin + " uid=" + uid
+                    + " sha256=" + sha.substring(0, 12) + "…";
+        } catch (Exception e) {
+            return "ERR:" + e.getMessage();
+        } finally {
+            if (tmp != null) tmp.delete();
+        }
     }
 
     private static void copy(InputStream in, File dst) throws Exception {
@@ -85,5 +122,17 @@ final class VPackageInstaller {
         } finally {
             try { in.close(); } catch (Exception ignored) {}
         }
+    }
+
+    static String sha256(File f) throws Exception {
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        try (InputStream in = new FileInputStream(f)) {
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) md.update(buf, 0, n);
+        }
+        StringBuilder sb = new StringBuilder();
+        for (byte b : md.digest()) sb.append(String.format("%02x", b));
+        return sb.toString();
     }
 }

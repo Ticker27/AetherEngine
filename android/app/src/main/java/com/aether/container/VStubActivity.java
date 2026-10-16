@@ -1,21 +1,16 @@
 package com.aether.container;
 
 import android.app.Activity;
-import android.content.Intent;
-import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
 /**
- * parity: ProxyActivity$P0 / ProxyActivity (stub ของ container framework ของแบบจำลอง :p0)
+ * VStubActivity — ประตูรัน guest "ใน container" (parity: ProxyActivity)
  *
- * ต้นแบบ: stub activity เปล่า ๆ เป็น "หุ่น" ที่ container framework ของแบบจำลอง ใช้ปลอมตัวรัน Activity ของแอป clone
- *   (รับ extra แล้วไปเรียก activity จริงของ target ผ่าน hook ของ framework)
- *
- * AetherEngine: stub แบบ structural — อ่าน extra "target" แล้วลองเปิด launcher activity ของ target
- * ด้วย intent ปกติ (ไม่มี hook); แอปที่ไม่มี launcher จะแสดง placeholder บนหน้า stub เอง
+ * กฎเหล็ก: ห้ามเปิดแอปที่ติดตั้งภายนอก (ไม่มี getLaunchIntentForPackage/startActivity ไปข้างนอก)
+ * เปิดจาก sandbox APK (root/data/app/<pkg>/base.apk) ผ่าน GuestLauncher เท่านั้น
  */
 public class VStubActivity extends Activity {
 
@@ -23,20 +18,30 @@ public class VStubActivity extends Activity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
 
-        String target = getIntent().getStringExtra("target");
+        String target = getIntent() != null ? getIntent().getStringExtra("target") : null;
+        if (target == null) {
+            showMessage("container:no-target");
+            return;
+        }
+
+        showMessage("container: launching " + target + " …  (จาก sandbox)");
+        String status = GuestLauncher.launchInto(this, target);
+        android.util.Log.i("AetherEngine", "VStub(" + target + ") → " + status);
+
+        // launched/booted-no-ui = guest ยก UI เข้าจอเองแล้ว (ผ่าน host.setContentView ภายใน GuestLauncher)
+        if (!status.startsWith("container:launched") && !status.startsWith("container:booted-no-ui")) {
+            showMessage("AetherEngine container\n\n"
+                    + "target: " + target + "\n\n"
+                    + status + "\n\n"
+                    + "(ไม่เปิดแอปที่ติดตั้งภายนอก — รันจาก sandbox ของ container เท่านั้น)");
+        }
+    }
+
+    private void showMessage(String text) {
         TextView tv = new TextView(this);
         tv.setGravity(Gravity.CENTER);
-        tv.setText("AetherEngine container stub\n\ntarget: " + (target == null ? "(none)" : target)
-                + "\n(โครง stub เดียวกับ ProxyActivity$P0 — ต้นแบบใช้ framework hook รัน activity จริงของ target)");
+        tv.setText(text);
         setContentView(tv, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-
-        if (target != null) {
-            Intent launch = getPackageManager().getLaunchIntentForPackage(target);
-            if (launch != null) {
-                // structural parity: ในต้นแบบ การ "เปิด" ถูก route ผ่าน VActivityManager/stub — ที่นี่เปิดตรง
-                startActivity(launch);
-            }
-        }
     }
 }

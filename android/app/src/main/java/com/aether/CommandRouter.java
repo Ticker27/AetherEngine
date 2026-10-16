@@ -22,13 +22,13 @@ import com.aether.helper.Native;
  *   "D"  → SharedPreferences.getString(key, "")
  *   "E"  → startActivity(ACTION_VIEW, Uri)    เปิด browser ภายนอก
  *   "F"  → return field i — cached string     (ต้นแบบ: deviceId/token cache → ที่นี่: cache ทั่วไป ไม่มี token)
- *   "H"  → install virtual app (AetherCore)
- *   "G"  → list/permission check (AetherCore)
+ *   "H"  → install เข้า sandbox (parse→copy→sha256→package.conf→content:// handoff)
+ *   "G"  → targets snapshot (pin 56.31.0 / sandbox version / device version)
  *   "I"  → image picker (activity result 1000 flow)
  *   "J"  → zip + share (4 KB buffer → chooser)
  *   "K"  → APK picker → install เข้า container
  *   "L"  → device fingerprint (reflection, อ่านอย่างเดียว)
- *   "M"  → launch แอปใน container ผ่าน stub activity
+ *   "M"  → launch guest ใน container จาก sandbox เท่านั้น (ห้ามเปิดแอปนอก)
  *
  * ตัดออก: code ที่ผูกกับระบบ login key/license ไม่มีในตาราง ไม่มี backend call ใด ๆ
  */
@@ -66,11 +66,10 @@ public final class CommandRouter {
             case "F":                                     // parity: "F" → cached field
                 if (arg != null) cached = String.valueOf(arg);
                 return cached;
-            case "G":                                     // parity: "G" → AetherCore list/check
-                return AetherCore.listInstalled(ctx).toString();
-            case "H":                                     // parity: "H" → install (ต้นแบบ: core install routine)
-                AetherCore.installFromUri(ctx, (Uri) arg);
-                return "install-started";
+            case "G":                                     // parity: "G" → targets snapshot (pin/sandbox/device)
+                return AetherCore.targetsSnapshot(ctx);
+            case "H":                                     // parity: "H" → install เข้า sandbox (deep pipeline)
+                return AetherCore.installFromUri(ctx, (Uri) arg);
             case "I": {                                   // image picker (parity: onActivityResult 1000 flow)
                 if (ctx instanceof Activity) {
                     Intent pick = new Intent(Intent.ACTION_GET_CONTENT);
@@ -101,9 +100,8 @@ public final class CommandRouter {
             }
             case "L":                                     // device fingerprint (reflection — อ่านอย่างเดียว)
                 return com.aether.util.DeviceRegistry.summary(ctx);
-            case "M":                                     // launch แอปใน container (route ผ่าน stub)
-                AetherCore.launchInContainer(ctx, String.valueOf(arg));
-                return "launch";
+            case "M":                                     // launch guest ใน container จาก sandbox (ไม่เปิดแอปนอก)
+                return AetherCore.launchInContainer(ctx, String.valueOf(arg));
             default:
                 return null;                              // ต้นแบบ: unknown code → ไม่ทำอะไร
         }

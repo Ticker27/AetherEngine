@@ -86,19 +86,32 @@ net   : lib/net/api_client.dart — HttpClient พร้อม findProxy จา�
 icons : ใช้ Material icons แทน svg assets (ลด dependency — จุดต่างเชิงโครงสร้างเล็กน้อย)
 ```
 
-## 5. Container
+## 5. Container — ติดตั้ง & เปิด guest ใน sandbox (A5)
 
 ```
-เลือก APK (ACTION_GET_CONTENT)
-  └─ CommandRouter "H" → AetherCore.installFromUri → VPackageInstaller.install
-        ├─ copy → filesDir/containers/<name>.apk
-        ├─ PackageManager.getPackageArchiveInfo → ตรวจว่าเป็น APK
-        ├─ JSONObject {pkg, version, apk, installedAt} → registry (SharedPreferences "com.aether.container")
-        └─ ACTION_VIEW (application/vnd.android.package-archive) ให้ system installer ทำงาน
+ติดตั้ง (code "K" เลือกไฟล์ → "H"):
+  parse APK (pkg/version/sha256) → copy → root/data/app/<pkg>/base.apk
+  → เทียบ pin (TargetRegistry: 8BP = 56.31.0) → pin=match|mismatch(want=…)
+  → เขียน root/data/system/package.conf (PackageSetting+states) + uid.conf (alloc uid ~10000)
+  → root/data/user/0/<pkg>/lib  (ที่วาง module .so)
+  → handoff ให้ system installer ด้วย content://com.aether.fileprovider/guest/<pkg>
+     (แก้เคสจริง: file:// → FileUriExposedException ทำให้ติดตั้งไม่จบ)
 
-เปิดแอปใน container
-  └─ AetherCore.launchInContainer(pkg) → VStubActivity
-        └─ อ่าน extra "target" → getLaunchIntentForPackage → startActivity
+เปิด (code "M") — ใน container เท่านั้น (ห้ามเปิดแอปที่ติดตั้งนอก):
+  adopt legacy containers/*.apk → sandbox (migration)
+  → มี sandbox apk? ไม่มี → "not-installed-in-sandbox"
+  → เทียบ pin: ไม่ตรง → "blocked:version-mismatch have=… need=56.31.0" (parity: สภาพล็อก)
+  → markLaunched ใน package.conf → VStubActivity
+      → GuestLauncher:
+         1. GuestManifest (AXML parser ในตัว) → launcher activity class
+         2. PathClassLoader(sandbox base.apk, root/data/user/0/<pkg>/lib, host loader)   ← ตรงหลักฐาน
+         3. โหลดคลาส → สร้างอินสแตนซ์ Activity
+         4. (best-effort) inject ทรัพยากร guest: AssetManager.addAssetPath
+         5. attach + onCreate ผ่าน reflection (รายงาน stage ที่ติดจริง)
+         6. ยก decorView ของ guest ขึ้น host
+
+Sandbox conf 6 ไฟล์ (parity): package.conf · uid.conf · user.conf · shared-user.conf · accounts.conf · fake-location.conf
+สถานะบาร์ใน UI จาก code "G": not-installed | match | mismatch (pin 56.31.0)
 ```
 
 ---
@@ -114,7 +127,10 @@ icons : ใช้ Material icons แทน svg assets (ลด dependency — จ
 | Native dynamic registration | ✅ ตรงโครง | ไม่มี `Java_*`; 10 methods + sig ตรงกับ live table ที่ยืนยันไว้ |
 | String/blob encryption | ✅ กลไกเดียวกัน (ขนาดเล็กกว่า) | XOR-stream decoder; ตารางเล็กใน `.rodata` |
 | Helper process + keep-alive | ✅ ตรงโครง | provider + FG daemon + inner + exact alarm |
-| Container install/launch | ⚠️ ลดรูป | registry + stub — ไม่ fork process, ไม่ hook ระบบ |
+| Container install | ✅ A5 | parse→sandbox(sha256,self-record)→package.conf/uid.conf→content:// handoff |
+| Container launch | ✅ A5 (in-container) | PathClassLoader จาก sandbox apk + guest libDir + attach/onCreate — ไม่มี external fallback |
+| Target pin (56.31.0) | ✅ A5 | TargetRegistry + บล็อกเมื่อ version-mismatch (parity: สภาพล็อก) |
+| Guest manifest (AXML) | ✅ A5 | parser ในตัว อ่าน launcher activity จาก apk ใน sandbox |
 | Proxy components `:p0–:p3` (Activity+L/Service/Provider/JobService) | ✅ A2a | โครงครบทุก process — stub ไม่ route เข้า target จริง, exported=false (แบบจำลองตั้ง true) |
 | VPN service (BIND_VPN_SERVICE, Always-On meta) | ✅ A2a | structural stub — ไม่ establish tunnel |
 | Browser ในแอป (WebView machinery) | ✅ A2b | JS on · mixed-always · safe-browsing off · cookie manager — exported=false |

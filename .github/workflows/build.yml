@@ -40,7 +40,7 @@ jobs:
         run: |
           APK=$(ls build/app/outputs/flutter-apk/*.apk | head -1)
           echo "APK=$APK"
-          unzip -l "$APK" | grep -E 'lib/arm64-v8a/(libaether|libflutter)\.so|classes[0-9]*\.dex|assets/flutter_assets'
+          unzip -l "$APK" | grep -E 'lib/arm64-v8a/(libaether|libflutter|libapp)\.so|classes[0-9]*\.dex|assets/flutter_assets'
           du -h "$APK"
 
       - name: Smoke — verify proxy components in merged manifest
@@ -75,11 +75,11 @@ jobs:
           sys.exit(fail)
           PY
 
-      - name: Smoke — verify 16KB page alignment of native libs
+      - name: Smoke — verify 3 native libs + 16KB page alignment
         run: |
           APK=$(ls build/app/outputs/flutter-apk/*.apk | head -1)
           rm -rf /tmp/so && mkdir -p /tmp/so
-          unzip -o -q "$APK" 'lib/arm64-v8a/libaether.so' 'lib/arm64-v8a/libflutter.so' -d /tmp/so
+          unzip -o -q "$APK" 'lib/arm64-v8a/libaether.so' 'lib/arm64-v8a/libflutter.so' 'lib/arm64-v8a/libapp.so' -d /tmp/so
           python3 - <<'PY'
           import struct, sys
           def loads_align(path):
@@ -94,12 +94,11 @@ jobs:
                       al.append(struct.unpack('<Q', d[o+48:o+56])[0])
               return al
           fail = 0
-          for name, enforce in (('libaether.so', True), ('libflutter.so', False)):
+          for name in ('libaether.so', 'libflutter.so', 'libapp.so'):
               al = loads_align('/tmp/so/lib/arm64-v8a/' + name)
               ok = all(a >= 0x4000 for a in al)
-              print(('OK  ' if ok else 'NOTE'), name, [hex(a) for a in al])
-              if enforce and not ok:
-                  print('ENFORCE FAIL:', name)
+              print(('OK  ' if ok else 'FAIL'), name, [hex(a) for a in al])
+              if not ok:
                   fail = 1
           sys.exit(fail)
           PY

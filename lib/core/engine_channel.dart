@@ -34,6 +34,7 @@ class EngineChannel {
   static Future<String?> openUrl(String url) => dispatch('E', url);
   static Future<String?> cached([String? v]) => dispatch('F', v);
   static Future<String?> listContainers() => dispatch('G');
+  static Future<String?> targets() => dispatch('G');
   static Future<String?> installApk(String uri) => dispatch('H', uri);
   static Future<String?> pickImage() => dispatch('I');
   static Future<String?> zipShare([String? path]) => dispatch('J', path);

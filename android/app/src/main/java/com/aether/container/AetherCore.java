@@ -75,16 +75,113 @@ public final class AetherCore {
     }
 
     /** parity: "H" → core install routine — VirtualInstaller: install APK เข้า container */
-    public static void installFromUri(Context ctx, Uri apkUri) {
-        VPackageInstaller.install(ctx, apkUri);
+    public static String installFromUri(Context ctx, Uri apkUri) {
+        return VPackageInstaller.install(ctx, apkUri);
     }
 
-    /** parity: ProxyActivity$P0 launch — เปิดแอปเป้าหมายผ่าน stub ของ container */
-    public static void launchInContainer(Context ctx, String targetPkg) {
+    /**
+     * parity: ProxyActivity$P0 launch — เปิด guest จาก sandbox ใน container ของเรา (ไม่มี external fallback)
+     * ลำดับ: adopt (โฟลว์เก่า) → มี sandbox apk? → เทียบ pin → เปิด VStubActivity
+     */
+    public static String launchInContainer(Context ctx, String targetPkg) {
+        adoptLegacyApkIfAny(ctx, targetPkg);
+
+        java.io.File apk = SandboxStore.guestApk(ctx, targetPkg);
+        if (!apk.exists()) return "not-installed-in-sandbox";
+
+        JSONObject st = SandboxStore.readPackageSetting(ctx, targetPkg);
+        String ver = st != null ? st.optString("versionName", "?") : "?";
+        TargetRegistry.Target t = TargetRegistry.byPkg(targetPkg);
+        if (t != null && !"?".equals(ver) && !ver.equals(t.pinVersion)) {
+            // parity: สภาพ "ล็อก" เมื่อเวอร์ชันไม่ตรง pin (หลักฐาน: กดแล้วไม่เข้า)
+            return "blocked:version-mismatch have=" + ver + " need=" + t.pinVersion;
+        }
+
+        SandboxStore.markLaunched(ctx, targetPkg, System.currentTimeMillis());
         Intent it = new Intent(ctx, VStubActivity.class);
         it.putExtra("target", targetPkg);
         it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         ctx.startActivity(it);
+        return "launched-in-container:" + (t != null ? t.name : targetPkg) + "@" + ver;
+    }
+
+    /** migration: APK ที่เคยคัดลอกไว้ที่ filesDir/containers (โฟลว์เดิม) → adopt เข้า sandbox root */
+    private static void adoptLegacyApkIfAny(Context ctx, String pkg) {
+        java.io.File dst = SandboxStore.guestApk(ctx, pkg);
+        if (dst.exists()) return;
+        java.io.File legacyDir = new java.io.File(ctx.getFilesDir(), "containers");
+        java.io.File[] files = legacyDir.listFiles();
+        if (files == null) return;
+        PackageManager pm = ctx.getPackageManager();
+        for (java.io.File f : files) {
+            if (!f.getName().endsWith(".apk")) continue;
+            PackageInfo pi = pm.getPackageArchiveInfo(f.getAbsolutePath(), 0);
+            if (pi == null || !pkg.equals(pi.packageName)) continue;
+            try {
+                SandboxStore.ensureBaseLayout(ctx);
+                java.io.File ddir = dst.getParentFile();
+                if (ddir != null && !ddir.exists()) ddir.mkdirs();
+                try (java.io.InputStream in = new java.io.FileInputStream(f);
+                     java.io.OutputStream out = new java.io.FileOutputStream(dst)) {
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                }
+                JSONObject setting = new JSONObject();
+                setting.put("apkPath", dst.getAbsolutePath());
+                setting.put("versionName", pi.versionName == null ? "?" : pi.versionName);
+                setting.put("versionCode", pi.getLongVersionCode());
+                setting.put("sha256", VPackageInstaller.sha256(f));
+                setting.put("installedAt", System.currentTimeMillis());
+                setting.put("source", "adopted-from-containers");
+                SandboxStore.writePackageSetting(ctx, pkg, setting);
+                SandboxStore.allocUid(ctx, pkg);
+                android.util.Log.i("AetherEngine", "adopted legacy apk → sandbox: " + f.getName());
+            } catch (Exception e) {
+                android.util.Log.w("AetherEngine", "adopt failed: " + e);
+            }
+            return;
+        }
+    }
+
+    /** snapshot ของเป้าหมายทั้ง 3 (สถานะจาก sandbox + ข้อมูลแอปที่ติดตั้งนอกเป็นข้อมูลเสริม) */
+    public static String targetsSnapshot(Context ctx) {
+        JSONArray arr = new JSONArray();
+        for (TargetRegistry.Target t : TargetRegistry.all()) {
+            JSONObject o = new JSONObject();
+            try {
+                o.put("id", t.id);
+                o.put("name", t.name);
+                o.put("pkg", t.pkg);
+                o.put("pin", t.pinVersion);
+                o.put("moduleVersion", t.moduleVersion);
+                JSONObject conf = SandboxStore.readPackageSetting(ctx, t.pkg);
+                String ver = conf != null ? conf.optString("versionName", null) : null;
+                o.put("sandboxVersion", ver == null ? JSONObject.NULL : ver);
+                String sha = conf != null ? conf.optString("sha256", null) : null;
+                o.put("sha256", sha == null ? JSONObject.NULL : sha);
+                String dv = installedVersion(ctx, t.pkg);
+                o.put("deviceVersion", dv == null ? JSONObject.NULL : dv);
+                String status;
+                if (ver == null) status = "not-installed";
+                else if (ver.equals(t.pinVersion)) status = "match";
+                else status = "mismatch";
+                o.put("status", status);
+            } catch (Exception e) {
+                o = new JSONObject();
+                try { o.put("error", String.valueOf(e)); } catch (Exception ignored) {}
+            }
+            arr.put(o);
+        }
+        return arr.toString();
+    }
+
+    private static String installedVersion(Context ctx, String pkg) {
+        try {
+            return ctx.getPackageManager().getPackageInfo(pkg, 0).versionName;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     // ── registry (แทน virtual package manager ของต้นแบบ ฉบับเล็ก) ──
