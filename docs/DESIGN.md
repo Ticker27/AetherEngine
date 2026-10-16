@@ -93,7 +93,7 @@ icons : ใช้ Material icons แทน svg assets (ลด dependency — จ
 ติดตั้ง (code "K" เลือกไฟล์ → "H"):
   parse APK (pkg/version/sha256) → copy → root/data/app/<pkg>/base.apk
   → เทียบ pin (TargetRegistry: 8BP = 56.31.0) → pin=match|mismatch(want=…)
-  → เขียน root/data/system/package.conf (PackageSetting+states) + uid.conf (alloc uid ~10000)
+  → เขียน root/data/app/<pkg>/package.conf (PackageSetting+states) + root/system/uid.conf (alloc uid ~10000)
   → root/data/user/0/<pkg>/lib  (ที่วาง module .so)
   → handoff ให้ system installer ด้วย content://com.aether.fileprovider/guest/<pkg>
      (แก้เคสจริง: file:// → FileUriExposedException ทำให้ติดตั้งไม่จบ)
@@ -111,7 +111,13 @@ icons : ใช้ Material icons แทน svg assets (ลด dependency — จ
          5. attach + onCreate ผ่าน reflection (รายงาน stage ที่ติดจริง)
          6. ยก decorView ของ guest ขึ้น host
 
-Sandbox conf 6 ไฟล์ (parity): package.conf · uid.conf · user.conf · shared-user.conf · accounts.conf · fake-location.conf
+Sandbox layout (ปรับตามดัมป์ runtime จริงของต้นแบบ 2026-10-16):
+  root/system/{uid.conf, user.conf, shared-user.conf}
+  root/data/app/<pkg>/{base.apk, package.conf, lib/}
+  root/data/user/0/<pkg>/ · root/data/user_de/0/<pkg>/ · root/cache/ · root/proc/0/cmdline (fake)
+Data layer (parity):
+  files/<sha256>            แคช content-addressed (ดัมป์จริง 90 ไฟล์: png/jpg/binary) — ของเรา seed ไอคอนเป้าหมาย + index.json
+  assets/targets/*.png      3 ไอคอนเป้าหมาย (สร้างเอง) · assets/community/*.svg 5 ไอคอนชุมชน (วาดเอง) · assets/data/targets.json (schema entry)
 สถานะบาร์ใน UI จาก code "G": not-installed | match | mismatch (pin 56.31.0)
 ```
 
@@ -132,6 +138,9 @@ Sandbox conf 6 ไฟล์ (parity): package.conf · uid.conf · user.conf · s
 | Container launch | ✅ A5 (in-container) | PathClassLoader จาก sandbox apk + guest libDir + attach/onCreate — ไม่มี external fallback |
 | Target pin (56.31.0) | ✅ A5 | TargetRegistry + บล็อกเมื่อ version-mismatch (parity: สภาพล็อก) |
 | Guest manifest (AXML) | ✅ A5 | parser ในตัว อ่าน launcher activity จาก apk ใน sandbox |
+| Sandbox layout (real) | ✅ A6 | root/system confs · root/data/app/<pkg>/{base.apk,package.conf,lib} · user/user_de · proc/0/cmdline (fake) · cache |
+| Content cache files/<sha256> | ✅ A6 | ContentCache + seed ไอคอนจาก assets (+index.json ส่วนเพิ่มของเรา) |
+| Data assets | ✅ A6 | ไอคอนเป้าหมาย ×3 · svg ชุมชน ×5 (ของเราเอง — ไม่ลอกไฟล์ต้นฉบับ) · targets.json |
 | Proxy components `:p0–:p3` (Activity+L/Service/Provider/JobService) | ✅ A2a | โครงครบทุก process — stub ไม่ route เข้า target จริง, exported=false (แบบจำลองตั้ง true) |
 | VPN service (BIND_VPN_SERVICE, Always-On meta) | ✅ A2a | structural stub — ไม่ establish tunnel |
 | Browser ในแอป (WebView machinery) | ✅ A2b | JS on · mixed-always · safe-browsing off · cookie manager — exported=false |

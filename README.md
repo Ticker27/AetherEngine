@@ -13,6 +13,7 @@
 
 ```
 AetherEngine/
+├── assets/                        # targets/*.png · community/*.svg · data/targets.json
 ├── lib/                          # Dart (Flutter UI + channel bridge)
 │   ├── main.dart                 # RootShell: Home · Settings · About (NavigationBar)
 │   ├── core/engine_channel.dart  # MethodChannel "com.aether/engine" — code table "0".."M"
@@ -67,6 +68,7 @@ AetherEngine/
 - **A2a** ✅ proxy `:p0–:p3` ครบ + VPN + permission battery + CI manifest gate
 - **A2b** ✅ browser ในแอป + zip share/provider + image picker/compress (codes I/J/K)
 - **A3** ✅ native เต็มชุด 10 methods + blob table ×4 + DeviceRegistry + gate native
+- **A6** ✅ data layer ตามดัมป์จริง: sandbox layout (root/system confs · data/app/<pkg>/{base.apk,package.conf,lib} · user[_de] · fake proc) · ContentCache files/<sha256> · ไอคอน/assets ของเราเอง
 - **A5** ✅ deep install/launch: TargetRegistry pin (8BP=56.31.0) · sandbox root + conf 6 ไฟล์ · GuestManifest(AXML) · GuestLauncher(PathClassLoader ใน container — ไม่เปิดแอปนอก) · content:// handoff แก้ FileUriExposedException
 - **A4** ✅ Dart UI เต็ม — Home (console + container list + launch) · Settings (ภาษา/เครื่อง) · About (ชุมชน) + i18n 4 ภาษา + proxy-aware client + code "M"
 

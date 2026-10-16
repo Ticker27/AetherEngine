@@ -55,11 +55,29 @@ public final class AetherCore {
         }
     }
 
-    /** parity: core post-init: อ่าน registry ของ container ที่ติดตั้งไว้ + fingerprint เครื่อง (อ่านอย่างเดียว) */
+    /** parity: core post-init: อ่าน registry ของ container + fingerprint (อ่านอย่างเดียว) + seed ไอคอนเข้า files/<sha256> */
     public static void postInit(Context ctx) {
         List<JSONObject> apps = listRegistry(ctx);
         android.util.Log.i("AetherEngine", "AetherCore.postInit: " + apps.size() + " container app(s)");
         android.util.Log.i("AetherEngine", "device: " + com.aether.util.DeviceRegistry.summary(ctx));
+        seedTargetIcons(ctx);
+    }
+
+    /** seed ไอคอนเป้าหมายจาก assets → ContentCache (files/<sha256>) — กลไกเดียวกับแคช asset ของต้นแบบ */
+    private static void seedTargetIcons(Context ctx) {
+        for (TargetRegistry.Target t : TargetRegistry.all()) {
+            try (java.io.InputStream in = ctx.getAssets().open("flutter_assets/assets/targets/" + t.icon)) {
+                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+                String sha = ContentCache.putBytes(ctx, bos.toByteArray(), t.icon);
+                android.util.Log.i("AetherEngine", "icon cached: " + t.id + " → files/"
+                        + (sha != null ? sha.substring(0, 12) + "…" : "(fail)"));
+            } catch (Exception e) {
+                android.util.Log.w("AetherEngine", "icon seed: " + t.id + " — " + e.getMessage());
+            }
+        }
     }
 
     public static String engineVersion() { return "AetherEngine 1.0.0 (structural model)"; }
@@ -98,6 +116,7 @@ public final class AetherCore {
         }
 
         SandboxStore.markLaunched(ctx, targetPkg, System.currentTimeMillis());
+        SandboxStore.writeProcCmdline(ctx, targetPkg);   // fake /proc/0/cmdline (parity จากดัมป์จริง)
         Intent it = new Intent(ctx, VStubActivity.class);
         it.putExtra("target", targetPkg);
         it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);

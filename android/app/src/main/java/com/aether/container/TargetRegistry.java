@@ -35,11 +35,11 @@ public final class TargetRegistry {
 
     static {
         TARGETS.add(new Target("eightballpool", "8 Ball Pool", "com.miniclip.eightballpool",
-                "56.31.0", "56.7.0", "8_ball_pool_icon.png"));
+                "56.31.0", "56.7.0", "eightballpool.png"));
         TARGETS.add(new Target("carrom", "Carrom Pool", "com.miniclip.carrom",
-                "19.5.2", "18.5.1", "carrom_pool_icon.png"));
+                "19.5.2", "18.5.1", "carrom.png"));
         TARGETS.add(new Target("soccerstars", "Soccer Stars", "com.miniclip.soccerstars",
-                "37.1.1", "36.5.2", "soccer_stars_icon.png"));
+                "37.1.1", "36.5.2", "soccerstars.png"));
     }
 
     private TargetRegistry() {}

@@ -88,7 +88,15 @@ class _HomePageState extends State<HomePage> {
                   children: <Widget>[
                     Row(
                       children: <Widget>[
-                        const Icon(Icons.sports_esports),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.asset(
+                            'assets/targets/${t['icon']}',
+                            width: 36,
+                            height: 36,
+                            errorBuilder: (_, __, ___) => const Icon(Icons.sports_esports),
+                          ),
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text('${t['name'] ?? '?'}',
