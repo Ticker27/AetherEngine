@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- AetherEngine manifest — โครงเต็มรูปแบบตามแบบจำลองอ้างอิง (ตัดเฉพาะระบบ login key) -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<!-- AetherEngine manifest — โครงเต็มรูปแบบตามแบบจำลองอ้างอิง (ตัดเฉพาะระบบ login key)
+     จุดต่างเชิงความปลอดภัยโดยเจตนา: proxy ทุกตัว exported=false (แบบจำลองตั้ง true) -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- ชุดสิทธิ์ตามความสามารถของ container/keep-alive (ยังไม่รวมชุดเต็มใน phase นี้) -->
+    <!-- ═══ กลุ่ม 1: พื้นฐานของ engine/container ═══ -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -11,6 +13,48 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- ═══ กลุ่ม 2: การมองเห็น/จัดการแพ็กเกจ (container ต้องรู้จักทุกแอป) ═══ -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <uses-permission android:name="android.permission.GET_PACKAGE_SIZE" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.QUERY_ADVANCED_PROTECTION_MODE" />
+
+    <!-- ═══ กลุ่ม 3: ไฟล์/สื่อ ═══ -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.MOUNT_UNMOUNT_FILESYSTEMS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+
+    <!-- ═══ กลุ่ม 4: หน้าจอ/overlay ═══ -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- ═══ กลุ่ม 5: ฮาร์ดแวร์/ตำแหน่ง ═══ -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <!-- ═══ กลุ่ม 6: PII/การสื่อสาร ═══ -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+
+    <!-- ═══ กลุ่ม 7: พลังงาน/VPN ═══ -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.BIND_VPN_SERVICE" />
+
     <application
         android:name=".App"
         android:label="@string/app_name"
@@ -18,7 +62,7 @@
         android:allowBackup="false"
         android:usesCleartextTraffic="false">
 
-        <!-- Flutter host (LAUNCHER) — parity: com.Entry (FlutterActivity) -->
+        <!-- ═══ main process — Flutter host ═══ -->
         <activity
             android:name=".Entry"
             android:exported="true"
@@ -37,20 +81,66 @@
             </intent-filter>
         </activity>
 
-        <!-- stub เปิดแอปใน container -->
         <activity
             android:name="com.aether.container.VStubActivity"
             android:exported="false"
             android:configChanges="locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density|layoutDirection|colorMode" />
 
-        <!-- :helper process — IPC bridge -->
+        <activity
+            android:name="com.aether.proxy.TransparentProxyActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <activity
+            android:name="com.aether.proxy.ProxyPendingActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- ═══ Proxy activities :p0–:p3 (+ landscape variants) ═══ -->
+        <activity android:name="com.aether.proxy.ProxyActivity$P0" android:process=":p0" android:exported="false" />
+        <activity android:name="com.aether.proxy.ProxyActivity$P0L" android:process=":p0" android:exported="false" android:screenOrientation="landscape" />
+        <activity android:name="com.aether.proxy.ProxyActivity$P1" android:process=":p1" android:exported="false" />
+        <activity android:name="com.aether.proxy.ProxyActivity$P1L" android:process=":p1" android:exported="false" android:screenOrientation="landscape" />
+        <activity android:name="com.aether.proxy.ProxyActivity$P2" android:process=":p2" android:exported="false" />
+        <activity android:name="com.aether.proxy.ProxyActivity$P2L" android:process=":p2" android:exported="false" android:screenOrientation="landscape" />
+        <activity android:name="com.aether.proxy.ProxyActivity$P3" android:process=":p3" android:exported="false" />
+        <activity android:name="com.aether.proxy.ProxyActivity$P3L" android:process=":p3" android:exported="false" android:screenOrientation="landscape" />
+
+        <!-- ═══ Proxy services :p0–:p3 ═══ -->
+        <service android:name="com.aether.proxy.ProxyService$P0" android:process=":p0" android:exported="false" />
+        <service android:name="com.aether.proxy.ProxyService$P1" android:process=":p1" android:exported="false" />
+        <service android:name="com.aether.proxy.ProxyService$P2" android:process=":p2" android:exported="false" />
+        <service android:name="com.aether.proxy.ProxyService$P3" android:process=":p3" android:exported="false" />
+
+        <!-- ═══ Proxy providers :p0–:p3 ═══ -->
+        <provider android:name="com.aether.proxy.ProxyContentProvider$P0" android:authorities="com.aether.proxy.provider.p0" android:process=":p0" android:exported="false" />
+        <provider android:name="com.aether.proxy.ProxyContentProvider$P1" android:authorities="com.aether.proxy.provider.p1" android:process=":p1" android:exported="false" />
+        <provider android:name="com.aether.proxy.ProxyContentProvider$P2" android:authorities="com.aether.proxy.provider.p2" android:process=":p2" android:exported="false" />
+        <provider android:name="com.aether.proxy.ProxyContentProvider$P3" android:authorities="com.aether.proxy.provider.p3" android:process=":p3" android:exported="false" />
+
+        <!-- ═══ Proxy job services :p0–:p3 ═══ -->
+        <service android:name="com.aether.proxy.ProxyJobService$P0" android:process=":p0" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
+        <service android:name="com.aether.proxy.ProxyJobService$P1" android:process=":p1" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
+        <service android:name="com.aether.proxy.ProxyJobService$P2" android:process=":p2" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
+        <service android:name="com.aether.proxy.ProxyJobService$P3" android:process=":p3" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <!-- ═══ VPN (main process) ═══ -->
+        <service
+            android:name="com.aether.proxy.ProxyVpnService"
+            android:exported="false"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <meta-data
+                android:name="android.net.VpnService.SUPPORTS_ALWAYS_ON"
+                android:value="true" />
+        </service>
+
+        <!-- ═══ :helper process — IPC bridge + keep-alive ═══ -->
         <provider
             android:name="com.aether.helper.SystemCallProvider"
             android:authorities="com.aether.helper.SystemCallProvider"
             android:process=":helper"
             android:exported="true" />
 
-        <!-- :helper process — keep-alive daemon -->
         <service
             android:name="com.aether.helper.DaemonService"
             android:process=":helper"

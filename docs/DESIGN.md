@@ -52,14 +52,19 @@ Launcher
 ## 4. Multi-process / keep-alive
 
 ```
-Main process (com.aether)                :helper process
-├─ App / Entry                    ├─ SystemCallProvider (exported, call("VM", …))
-├─ VStubActivity                         │    └─ ตอบ Bundle + Binder (_S_|_server_)
-└─ (UI + dispatcher)                     └─ DaemonService
-                                              ├─ NotificationChannel "com.aether.engine"
-                                              ├─ startForeground(10000, notif)
-                                              ├─ startService(DaemonInnerService)  # foreground จับคู่
-                                              └─ AlarmManager.setExactAndAllowWhileIdle(now+60s, PendingIntent→self)
+Main process (com.aether)                 :helper process
+├─ App / Entry                            ├─ SystemCallProvider (exported, call("VM", …))
+├─ TransparentProxyActivity               │    └─ ตอบ Bundle + Binder (_S_|_server_)
+├─ ProxyPendingActivity                   └─ DaemonService
+├─ ProxyVpnService (BIND_VPN_SERVICE)         ├─ NotificationChannel "com.aether.engine"
+└─ VStubActivity                              ├─ startForeground(10000, notif)
+                                              ├─ startService(DaemonInnerService)
+                                              └─ AlarmManager.setExactAndAllowWhileIdle(now+60s → self)
+
+:p0   ProxyActivity$P0/P0L · ProxyService$P0 · ProxyContentProvider$P0 · ProxyJobService$P0
+:p1   ProxyActivity$P1/P1L · ProxyService$P1 · ProxyContentProvider$P1 · ProxyJobService$P1
+:p2   ProxyActivity$P2/P2L · ProxyService$P2 · ProxyContentProvider$P2 · ProxyJobService$P2
+:p3   ProxyActivity$P3/P3L · ProxyService$P3 · ProxyContentProvider$P3 · ProxyJobService$P3
 ```
 
 ## 5. Container
@@ -89,6 +94,7 @@ Main process (com.aether)                :helper process
 | String/blob encryption | ✅ กลไกเดียวกัน (ขนาดเล็กกว่า) | XOR-stream decoder; ตารางเล็กใน `.rodata` |
 | Helper process + keep-alive | ✅ ตรงโครง | provider + FG daemon + inner + exact alarm |
 | Container install/launch | ⚠️ ลดรูป | registry + stub — ไม่ fork process, ไม่ hook ระบบ |
-| Multi-process sandbox (`:pN` × 4) | ❌ ตัด | ลดความซับซ้อน |
+| Proxy components `:p0–:p3` (Activity+L/Service/Provider/JobService) | ✅ A2a | โครงครบทุก process — stub ไม่ route เข้า target จริง, exported=false (แบบจำลองตั้ง true) |
+| VPN service (BIND_VPN_SERVICE, Always-On meta) | ✅ A2a | structural stub — ไม่ establish tunnel |
 | License / login key / seller API | ❌ ตัด | ไม่มีในโปรเจกต์นี้โดยเจตนา |
 | Anti-root / anti-debug / RWX packing | ❌ ตัด | ไม่เกี่ยวกับกลไกที่ต้องการศึกษา |

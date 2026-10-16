@@ -43,6 +43,20 @@ jobs:
           unzip -l "$APK" | grep -E 'lib/arm64-v8a/(libaether|libflutter)\.so|classes[0-9]*\.dex|assets/flutter_assets'
           du -h "$APK"
 
+      - name: Smoke — verify proxy components in merged manifest
+        run: |
+          APK=$(ls build/app/outputs/flutter-apk/*.apk | head -1)
+          AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | tail -1)
+          echo "aapt2=$AAPT"
+          "$AAPT" dump xmltree --file AndroidManifest.xml "$APK" > /tmp/manifest.txt
+          fail=0
+          for c in 'ProxyActivity$P0' 'ProxyActivity$P3L' 'ProxyService$P2' 'ProxyContentProvider$P1' 'ProxyJobService$P3' 'ProxyVpnService' 'SystemCallProvider' 'com.aether.Entry' ; do
+            if grep -q "$c" /tmp/manifest.txt; then echo "OK   $c"; else echo "MISS $c"; fail=1; fi
+          done
+          echo "--- process tags ---"
+          grep -oE '":p[0-3]"|":helper"' /tmp/manifest.txt | sort | uniq -c
+          exit $fail
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
