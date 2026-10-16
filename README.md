@@ -61,7 +61,8 @@ AetherEngine/
 ## เฟสการประกอบ
 
 - **A1** ✅ Flutter host + channel bridge + native engine เดิม + CI Flutter — *build gate*
-- **A2** คิวถัดไป: proxy multi-process (`:p0–:p3`), VPN service, browser ในแอป, zip/picker
-- **A3** native เต็มชุด (10 methods + table ขยาย), **A4** Dart UI เต็ม (container/settings/about + i18n + assets)
+- **A2a** ✅ proxy `:p0–:p3` ครบ + VPN + permission battery + CI manifest gate
+- **A2b** ✅ browser ในแอป + zip share/provider + image picker/compress (codes I/J/K)
+- **A3** คิวถัดไป: native เต็มชุด (10 methods + table ขยาย) — **A4** Dart UI เต็ม
 
 > structural model เพื่อการศึกษา — ไม่ใช่ container framework เต็มรูป (ไม่ hook AMS/PMS) ดู [docs/DESIGN.md](docs/DESIGN.md)

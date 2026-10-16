@@ -35,6 +35,9 @@ Launcher
 | `"F"` | cached string (get/set) | static field |
 | `"G"` | list แอปใน container | `AetherCore.listInstalled` |
 | `"H"` | ติดตั้งเข้า container | `AetherCore.installFromUri` → `VPackageInstaller` |
+| `"I"` | image picker (activity result 1000) | `ImageCompressor` → กลับทาง `imageResult` |
+| `"J"` | zip + share (4 KB buffer → chooser) | `ZipShare` → `AetherFileProvider` (cacheDir) |
+| `"K"` | APK picker → install | activity result 1001 → code `"H"` |
 
 ## 3. Native engine (`libaether.so`)
 
@@ -96,5 +99,8 @@ Main process (com.aether)                 :helper process
 | Container install/launch | ⚠️ ลดรูป | registry + stub — ไม่ fork process, ไม่ hook ระบบ |
 | Proxy components `:p0–:p3` (Activity+L/Service/Provider/JobService) | ✅ A2a | โครงครบทุก process — stub ไม่ route เข้า target จริง, exported=false (แบบจำลองตั้ง true) |
 | VPN service (BIND_VPN_SERVICE, Always-On meta) | ✅ A2a | structural stub — ไม่ establish tunnel |
+| Browser ในแอป (WebView machinery) | ✅ A2b | JS on · mixed-always · safe-browsing off · cookie manager — exported=false |
+| Zip share + file provider | ✅ A2b | provider เขียนเอง อ่านได้เฉพาะ cacheDir (กัน path traversal) |
+| Image picker + compress 128² q85 ≤10 KB | ✅ A2b | ครบกลไก พร้อมส่งผลกลับ Dart |
 | License / login key / seller API | ❌ ตัด | ไม่มีในโปรเจกต์นี้โดยเจตนา |
 | Anti-root / anti-debug / RWX packing | ❌ ตัด | ไม่เกี่ยวกับกลไกที่ต้องการศึกษา |

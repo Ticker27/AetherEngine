@@ -11,6 +11,9 @@ import 'package:flutter/services.dart';
 ///   "F" → cached string (get/set)
 ///   "G" → list container apps
 ///   "H" → install apk (uri string)
+///   "I" → image picker (ผลย่อรูปส่งกลับทาง "imageResult")
+///   "J" → zip + share
+///   "K" → apk picker
 /// ทุกอย่างวิ่งผ่าน CommandRouter ฝั่ง Java → (เมื่อถึงคิว) → libaether.so
 class EngineChannel {
   EngineChannel._();
@@ -30,4 +33,17 @@ class EngineChannel {
   static Future<String?> cached([String? v]) => dispatch('F', v);
   static Future<String?> listContainers() => dispatch('G');
   static Future<String?> installApk(String uri) => dispatch('H', uri);
+  static Future<String?> pickImage() => dispatch('I');
+  static Future<String?> zipShare([String? path]) => dispatch('J', path);
+  static Future<String?> pickApk() => dispatch('K');
+
+  /// รับผลจากฝั่ง host (เช่น ผลย่อรูปจาก code "I")
+  static void onImageResult(void Function(String payload) cb) {
+    _channel.setMethodCallHandler((MethodCall call) async {
+      if (call.method == 'imageResult') {
+        cb(call.arguments?.toString() ?? '');
+      }
+      return null;
+    });
+  }
 }

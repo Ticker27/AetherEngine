@@ -28,22 +28,26 @@ public class Entry extends FlutterActivity {
 
     private static final String CHANNEL = "com.aether/engine";
     private static final int REQ_NOTIF = 1002;
+    private static final int REQ_IMAGE = 1000;
+    private static final int REQ_APK = 1001;
+
+    private MethodChannel channel;
 
     @Override
     public void configureFlutterEngine(@NonNull FlutterEngine engine) {
         super.configureFlutterEngine(engine);
 
-        new MethodChannel(engine.getDartExecutor().getBinaryMessenger(), CHANNEL)
-                .setMethodCallHandler((call, result) -> {
-                    try {
-                        Object arg = call.arguments;
-                        arg = adaptArgument(call.method, arg);
-                        Object out = CommandRouter.dispatch(Entry.this, call.method, arg);
-                        result.success(out == null ? "" : out.toString());
-                    } catch (Throwable t) {
-                        result.error("AETHER", t.getClass().getSimpleName(), t.getMessage());
-                    }
-                });
+        channel = new MethodChannel(engine.getDartExecutor().getBinaryMessenger(), CHANNEL);
+        channel.setMethodCallHandler((call, result) -> {
+            try {
+                Object arg = call.arguments;
+                arg = adaptArgument(call.method, arg);
+                Object out = CommandRouter.dispatch(Entry.this, call.method, arg);
+                result.success(out == null ? "" : out.toString());
+            } catch (Throwable t) {
+                result.error("AETHER", t.getClass().getSimpleName(), t.getMessage());
+            }
+        });
     }
 
     /** แปลง argument จาก Dart ให้ตรงกับชนิดที่ CommandRouter ต้องการ */
@@ -76,5 +80,31 @@ public class Entry extends FlutterActivity {
         android.app.NotificationManager nm = getSystemService(android.app.NotificationManager.class);
         android.app.NotificationChannel ch = nm.getNotificationChannel(DaemonService.CHANNEL_ID);
         android.util.Log.i("AetherEngine", "Entry.onCreate: channel=" + (ch != null ? ch.getImportance() : "absent"));
+    }
+
+    @Override
+    protected void onActivityResult(int req, int res, android.content.Intent data) {
+        super.onActivityResult(req, res, data);
+        if (res != RESULT_OK || data == null || data.getData() == null) return;
+
+        if (req == REQ_IMAGE) {
+            // parity: decode → centerCrop 128×128 → JPEG q85 → ลดทีละ 5 จน ≤10 KB แล้วส่งผลกลับ
+            final android.net.Uri uri = data.getData();
+            new Thread(() -> {
+                String payload;
+                try {
+                    byte[] jpeg = com.aether.media.ImageCompressor.compress(Entry.this, uri);
+                    java.io.File out = new java.io.File(getCacheDir(), "pick_" + System.currentTimeMillis() + ".jpg");
+                    try (java.io.FileOutputStream fos = new java.io.FileOutputStream(out)) { fos.write(jpeg); }
+                    payload = out.getAbsolutePath() + "|" + jpeg.length + "B";
+                } catch (Exception e) {
+                    payload = "ERR:" + e.getMessage();
+                }
+                final String p = payload;
+                runOnUiThread(() -> { if (channel != null) channel.invokeMethod("imageResult", p); });
+            }).start();
+        } else if (req == REQ_APK) {
+            CommandRouter.dispatch(this, "H", data.getData());
+        }
     }
 }

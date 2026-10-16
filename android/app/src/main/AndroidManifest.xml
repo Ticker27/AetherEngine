@@ -96,6 +96,18 @@
             android:exported="false"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- browser ในแอป (โครงจากแบบจำลอง — exported=false เป็นจุดต่างเชิงความปลอดภัย) -->
+        <activity
+            android:name="com.aether.ui.InternalWebBrowser"
+            android:exported="false" />
+
+        <!-- provider สำหรับแชร์ไฟล์ออก (zip/รูป) — อ่านได้เฉพาะ cacheDir -->
+        <provider
+            android:name="com.aether.share.AetherFileProvider"
+            android:authorities="com.aether.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
         <!-- ═══ Proxy activities :p0–:p3 (+ landscape variants) ═══ -->
         <activity android:name="com.aether.proxy.ProxyActivity$P0" android:process=":p0" android:exported="false" />
         <activity android:name="com.aether.proxy.ProxyActivity$P0L" android:process=":p0" android:exported="false" android:screenOrientation="landscape" />

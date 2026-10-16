@@ -50,7 +50,7 @@ jobs:
           echo "aapt2=$AAPT"
           "$AAPT" dump xmltree --file AndroidManifest.xml "$APK" > /tmp/manifest.txt
           fail=0
-          for c in 'ProxyActivity$P0' 'ProxyActivity$P3L' 'ProxyService$P2' 'ProxyContentProvider$P1' 'ProxyJobService$P3' 'ProxyVpnService' 'SystemCallProvider' 'com.aether.Entry' ; do
+          for c in 'ProxyActivity$P0' 'ProxyActivity$P3L' 'ProxyService$P2' 'ProxyContentProvider$P1' 'ProxyJobService$P3' 'ProxyVpnService' 'SystemCallProvider' 'com.aether.Entry' 'InternalWebBrowser' 'AetherFileProvider' ; do
             if grep -q "$c" /tmp/manifest.txt; then echo "OK   $c"; else echo "MISS $c"; fail=1; fi
           done
           echo "--- process tags ---"

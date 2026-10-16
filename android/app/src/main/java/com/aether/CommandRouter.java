@@ -24,6 +24,9 @@ import com.aether.helper.Native;
  *   "F"  → return field i — cached string     (ต้นแบบ: deviceId/token cache → ที่นี่: cache ทั่วไป ไม่มี token)
  *   "H"  → install virtual app (AetherCore)
  *   "G"  → list/permission check (AetherCore)
+ *   "I"  → image picker (activity result 1000 flow)
+ *   "J"  → zip + share (4 KB buffer → chooser)
+ *   "K"  → APK picker → install เข้า container
  *
  * ตัดออก: code ที่ผูกกับระบบ login key/license ไม่มีในตาราง ไม่มี backend call ใด ๆ
  */
@@ -65,6 +68,34 @@ public final class CommandRouter {
             case "H":                                     // parity: "H" → install (ต้นแบบ: core install routine)
                 AetherCore.installFromUri(ctx, (Uri) arg);
                 return "install-started";
+            case "I": {                                   // image picker (parity: onActivityResult 1000 flow)
+                if (ctx instanceof Activity) {
+                    Intent pick = new Intent(Intent.ACTION_GET_CONTENT);
+                    pick.setType("image/*");
+                    ((Activity) ctx).startActivityForResult(pick, 1000);
+                }
+                return "image-picker";
+            }
+            case "J": {                                   // zip + share (parity: j0) — arg=path, null → demo file
+                try {
+                    String path = arg == null ? null : String.valueOf(arg);
+                    java.io.File src = (path != null && !path.isEmpty())
+                            ? new java.io.File(path)
+                            : com.aether.share.ZipShare.demoFile(ctx);
+                    com.aether.share.ZipShare.share(ctx, src);
+                    return "share-started";
+                } catch (Exception e) {
+                    return "ERR:" + e.getMessage();
+                }
+            }
+            case "K": {                                   // APK picker → ติดตั้งเข้า container
+                if (ctx instanceof Activity) {
+                    Intent pick = new Intent(Intent.ACTION_GET_CONTENT);
+                    pick.setType("application/vnd.android.package-archive");
+                    ((Activity) ctx).startActivityForResult(pick, 1001);
+                }
+                return "apk-picker";
+            }
             default:
                 return null;                              // ต้นแบบ: unknown code → ไม่ทำอะไร
         }
