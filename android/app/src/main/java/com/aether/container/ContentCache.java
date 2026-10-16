@@ -64,6 +64,7 @@ public final class ContentCache {
             indexPut(c, sha, name, data.length);
             return sha;
         } catch (Exception e) {
+            android.util.Log.w("AetherEngine", "cache putBytes(" + name + "): " + e);
             return null;
         }
     }

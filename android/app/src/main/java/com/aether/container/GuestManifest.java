@@ -21,6 +21,8 @@ final class GuestManifest {
     final String applicationName;
     final String launcherActivity;
     final List<String> activities;
+    final List<String> providerNames = new ArrayList<>();
+    final List<String> providerAuthorities = new ArrayList<>();
 
     private GuestManifest(String pkg, String appName, String launcher, List<String> acts) {
         this.packageName = pkg;
@@ -66,6 +68,8 @@ final class GuestManifest {
         String appName = null;
         String launcher = null;
         List<String> acts = new ArrayList<>();
+        List<String> acts0 = new ArrayList<>();
+        List<String> auths0 = new ArrayList<>();
         String curActivity = null;
         boolean inFilter = false;
         boolean seenMain = false;
@@ -109,7 +113,7 @@ final class GuestManifest {
                 String name = nameIdx < pool.length ? pool[nameIdx] : null;
                 int attrCount = u16(b, off + 28);
                 int attrOff = off + 36;                    // attributes start (node hdr 16 + ext hdr 20)
-                String aName = null, aValue = null;
+                String aName = null, aValue = null, aAuth = null;
                 for (int i = 0; i < attrCount; i++) {
                     int ao = attrOff + i * 20;
                     int nIdx = u32(b, ao + 4);
@@ -118,9 +122,14 @@ final class GuestManifest {
                     String av = (rawIdx != 0xFFFFFFFF && rawIdx < pool.length) ? pool[rawIdx] : null;
                     if ("name".equals(an) && av != null) { aName = av; }
                     if ("package".equals(an) && av != null && pkg == null) { pkg = av; }
+                    if ("authorities".equals(an) && av != null) { aAuth = av; }
                 }
                 if ("application".equals(name) && aName != null && appName == null) {
                     appName = aName;
+                }
+                if ("provider".equals(name) && aName != null) {
+                    acts0.add(aName);
+                    auths0.add(aAuth);
                 }
                 if ("activity".equals(name) && aName != null) {
                     acts.add(aName);
@@ -148,6 +157,9 @@ final class GuestManifest {
             off += size;
         }
         if (pkg == null) throw new IllegalStateException("no package name");
-        return new GuestManifest(pkg, appName, launcher, acts);
+        GuestManifest gm = new GuestManifest(pkg, appName, launcher, acts);
+        gm.providerNames.addAll(acts0);
+        gm.providerAuthorities.addAll(auths0);
+        return gm;
     }
 }

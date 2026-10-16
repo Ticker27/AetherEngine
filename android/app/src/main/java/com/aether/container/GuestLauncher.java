@@ -166,8 +166,11 @@ public final class GuestLauncher {
                 android.util.Log.w(TAG, "guest appInfo build failed: " + t);
             }
 
-            // 6a) boot guest Application (packer init ของเกม — ต้องมาก่อน Activity) + module (ถ้ามี)
-            bootGuestApplication(host, gm, guestLoader, guestRes, guestAi, pkg, libDir);
+            // 6a) boot guest providers → Application (ลำดับเดียวกับ framework จริง: providers มาก่อน Application)
+            android.content.Context guestCtx = new GuestContext(host, pkg, guestAi, guestLoader, guestRes,
+                    SandboxStore.guestUserDataDir(host, pkg));
+            bootGuestProviders(gm, guestLoader, guestCtx, guestAi, pkg);
+            bootGuestApplication(host, gm, guestLoader, guestCtx, guestAi, pkg);
             loadModuleIfPresent(guestLoader, libDir);
 
             // 6) สร้าง + attach + onCreate (reflection; adapter ตาม signature ของ API)
@@ -239,10 +242,44 @@ public final class GuestLauncher {
         return false;
     }
 
+    /** boot guest providers — สำคัญ: packer (เช่น Deku*) init ที่ชั้น provider ก่อน Application เสมอ */
+    private static void bootGuestProviders(GuestManifest gm, ClassLoader loader,
+                                           android.content.Context guestCtx,
+                                           android.content.pm.ApplicationInfo guestAi, String pkg) {
+        for (int i = 0; i < gm.providerNames.size(); i++) {
+            String raw = gm.providerNames.get(i);
+            String full = raw.startsWith(".") ? pkg + raw : raw;
+            String auth = i < gm.providerAuthorities.size() ? gm.providerAuthorities.get(i) : null;
+            try {
+                Class<?> cls = loader.loadClass(full);
+                Object provider = cls.getDeclaredConstructor().newInstance();
+                if (provider instanceof android.content.ContentProvider) {
+                    android.content.pm.ProviderInfo info = new android.content.pm.ProviderInfo();
+                    info.name = full;
+                    info.authority = auth;
+                    info.packageName = pkg;
+                    info.applicationInfo = guestAi;
+                    java.lang.reflect.Method attach = android.content.ContentProvider.class
+                            .getDeclaredMethod("attachInfo", android.content.Context.class,
+                                    android.content.pm.ProviderInfo.class);
+                    attach.setAccessible(true);
+                    attach.invoke(provider, guestCtx, info);
+                    java.lang.reflect.Method oc = android.content.ContentProvider.class
+                            .getDeclaredMethod("onCreate");
+                    oc.setAccessible(true);
+                    oc.invoke(provider);
+                    android.util.Log.i(TAG, "guest provider booted: " + full);
+                }
+            } catch (Throwable t) {
+                android.util.Log.w(TAG, "guest provider skip " + full + ": " + describe(t));
+            }
+        }
+    }
+
     /** boot guest Application: attachBaseContext(GuestContext) + onCreate — จุดที่ packer โหลด native ของเกม */
     private static void bootGuestApplication(Activity host, GuestManifest gm, ClassLoader loader,
-                                             Resources guestRes, android.content.pm.ApplicationInfo guestAi,
-                                             String pkg, File libDir) {
+                                             android.content.Context guestCtx,
+                                             android.content.pm.ApplicationInfo guestAi, String pkg) {
         String appName = gm.applicationName;
         if (appName == null || appName.isEmpty()) {
             android.util.Log.i(TAG, "guest app: (no application class)");
@@ -257,8 +294,6 @@ public final class GuestLauncher {
             Class<?> appCls = loader.loadClass(full);
             android.app.Application guestApp =
                     (android.app.Application) appCls.getDeclaredConstructor().newInstance();
-            android.content.Context guestCtx = new GuestContext(host, pkg, guestAi, loader, guestRes,
-                    SandboxStore.guestUserDataDir(host, pkg));
             java.lang.reflect.Method attach =
                     android.content.ContextWrapper.class.getDeclaredMethod("attachBaseContext",
                             android.content.Context.class);
