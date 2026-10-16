@@ -32,6 +32,43 @@ public final class GuestLauncher {
 
     public static final String TAG = "AetherEngine";
 
+    /** ถอด InvocationTargetException ให้เห็น cause จริง (สำคัญต่อการวินิจฉัย stage) */
+    private static String describe(Throwable t) {
+        Throwable c = t;
+        if (t instanceof java.lang.reflect.InvocationTargetException && t.getCause() != null) {
+            c = t.getCause();
+        }
+        return c.getClass().getName() + ": " + c.getMessage();
+    }
+
+    /** แตก lib/*.so ของ guest จาก APK → sandbox lib dir (Unity/IL2CPP หา nativeLibraryDir) */
+    private static void prepareGuestNatives(File apk, File libDir) {
+        try {
+            File[] have = libDir.listFiles();
+            if (have != null && have.length > 0) return;   // ทำครั้งเดียว
+            int n = 0; long total = 0;
+            try (java.util.zip.ZipFile zf = new java.util.zip.ZipFile(apk)) {
+                java.util.Enumeration<? extends java.util.zip.ZipEntry> en = zf.entries();
+                while (en.hasMoreElements()) {
+                    java.util.zip.ZipEntry e = en.nextElement();
+                    String name = e.getName();
+                    if (!name.startsWith("lib/arm64-v8a/") || !name.endsWith(".so")) continue;
+                    File out = new File(libDir, name.substring(name.lastIndexOf('/') + 1));
+                    try (java.io.InputStream in = zf.getInputStream(e);
+                         java.io.FileOutputStream os = new java.io.FileOutputStream(out)) {
+                        byte[] buf = new byte[65536];
+                        int r;
+                        while ((r = in.read(buf)) > 0) os.write(buf, 0, r);
+                    }
+                    n++; total += out.length();
+                }
+            }
+            android.util.Log.i(TAG, "guest natives extracted: " + n + " lib(s), " + (total / 1024 / 1024) + " MB → " + libDir);
+        } catch (Throwable t) {
+            android.util.Log.w(TAG, "native extract failed: " + t);
+        }
+    }
+
     private static boolean sBypassTried = false;
 
     /** เปิด hiddenapi exemptions เพื่อให้ reflection แตะ method ของ framework ได้
@@ -49,7 +86,7 @@ public final class GuestLauncher {
                     getDeclaredMethod.invoke(vmRuntime, "getRuntime", (Object) null);
             Object runtime = getRuntime.invoke(null);
             java.lang.reflect.Method setExemptions = (java.lang.reflect.Method)
-                    getDeclaredMethod.invoke(vmRuntime, "setHiddenApiExemptions", String[].class);
+                    getDeclaredMethod.invoke(vmRuntime, "setHiddenApiExemptions", (Object) new Class[]{String[].class});
             setExemptions.invoke(runtime, (Object) new String[]{"L"});
             android.util.Log.i(TAG, "hiddenapi exemptions set");
         } catch (Throwable t) {
@@ -80,8 +117,9 @@ public final class GuestLauncher {
             if (launcher == null) return "container:no-launcher-activity";
             String className = launcher.startsWith(".") ? gm.packageName + launcher : launcher;
 
-            // 3) PathClassLoader ของ guest (apk + libDir ของ guest)
+            // 3) แตก native libs ของ guest + PathClassLoader (apk + libDir ของ guest)
             File libDir = SandboxStore.guestLibDir(host, pkg);
+            prepareGuestNatives(apk, libDir);
             ClassLoader guestLoader = new dalvik.system.PathClassLoader(
                     apk.getAbsolutePath(), libDir.getAbsolutePath(), GuestLauncher.class.getClassLoader());
             android.util.Log.i(TAG, "guest: PathClassLoader apk=" + apk.getAbsolutePath()
@@ -92,7 +130,7 @@ public final class GuestLauncher {
             try {
                 actCls = guestLoader.loadClass(className);
             } catch (Throwable t) {
-                return "container:class-load-failed(" + className + "):" + t;
+                return "container:class-load-failed(" + className + "):" + describe(t);
             }
             if (!Activity.class.isAssignableFrom(actCls)) {
                 return "container:not-an-activity(" + className + ")";
@@ -113,6 +151,24 @@ public final class GuestLauncher {
                 android.util.Log.w(TAG, "guest resources inject skipped: " + t);
             }
 
+            // 5b) guest ApplicationInfo — ชี้ทุก dir เข้า sandbox (Unity/IL2CPP ใช้ค่านี้)
+            android.content.pm.ApplicationInfo guestAi = null;
+            try {
+                android.content.pm.PackageInfo gpi =
+                        host.getPackageManager().getPackageArchiveInfo(apk.getAbsolutePath(), 0);
+                if (gpi != null && gpi.applicationInfo != null) {
+                    guestAi = gpi.applicationInfo;
+                    guestAi.sourceDir = apk.getAbsolutePath();
+                    guestAi.publicSourceDir = apk.getAbsolutePath();
+                    guestAi.nativeLibraryDir = libDir.getAbsolutePath();
+                    guestAi.dataDir = SandboxStore.guestUserDataDir(host, pkg).getAbsolutePath();
+                    android.util.Log.i(TAG, "guest appInfo: src=" + guestAi.sourceDir
+                            + " nativeLib=" + guestAi.nativeLibraryDir + " data=" + guestAi.dataDir);
+                }
+            } catch (Throwable t) {
+                android.util.Log.w(TAG, "guest appInfo build failed: " + t);
+            }
+
             // 6) สร้าง + attach + onCreate (reflection; adapter ตาม signature ของ API)
             Activity guest;
             try {
@@ -120,13 +176,15 @@ public final class GuestLauncher {
                 ctor.setAccessible(true);
                 guest = (Activity) ctor.newInstance();
             } catch (Throwable t) {
-                return "container:instantiate-failed:" + t;
+                android.util.Log.w(TAG, "instantiate failed", t);
+                return "container:instantiate-failed:" + describe(t);
             }
 
             try {
-                attachGuest(host, guest, className, pkg, guestRes);
+                attachGuest(host, guest, className, pkg, guestRes, guestAi);
             } catch (Throwable t) {
-                return "container:attach-failed:" + t;
+                android.util.Log.w(TAG, "attach failed", t);
+                return "container:attach-failed:" + describe(t);
             }
 
             try {
@@ -135,7 +193,8 @@ public final class GuestLauncher {
                 oc.setAccessible(true);
                 oc.invoke(guest, (Object) null);
             } catch (Throwable t) {
-                return "container:guest-onCreate-failed:" + t;
+                android.util.Log.w(TAG, "guest onCreate failed", t);
+                return "container:guest-onCreate-failed:" + describe(t);
             }
 
             // 7) ยก decorView ของ guest ขึ้น host (ถ้ามี)
@@ -147,16 +206,16 @@ public final class GuestLauncher {
                 }
                 return "container:booted-no-ui(" + className + ")";
             } catch (Throwable t) {
-                return "container:ui-attach-failed:" + t;
+                return "container:ui-attach-failed:" + describe(t);
             }
         } catch (Throwable t) {
-            return "container:launch-error:" + t;
+            return "container:launch-error:" + describe(t);
         }
     }
 
     /** attach ด้วย reflection — เดิมเป็น signature ที่ยาวและเปลี่ยนตาม API; กรอกตามชนิดพารามิเตอร์จริง */
     private static void attachGuest(Activity host, Activity guest, String className, String pkg,
-                                    Resources guestRes) throws Exception {
+                                    Resources guestRes, android.content.pm.ApplicationInfo guestAi) throws Exception {
         Class<?> atCls = Class.forName("android.app.ActivityThread");
         Object mainThread = atCls.getMethod("currentActivityThread").invoke(null);
         Object instrumentation = atCls.getMethod("getInstrumentation").invoke(mainThread);
@@ -174,7 +233,7 @@ public final class GuestLauncher {
         ActivityInfo info = new ActivityInfo();
         info.packageName = pkg;
         info.name = className;
-        info.applicationInfo = host.getApplicationInfo();
+        info.applicationInfo = guestAi != null ? guestAi : host.getApplicationInfo();
 
         for (Method m : Activity.class.getDeclaredMethods()) {
             if (!"attach".equals(m.getName())) continue;

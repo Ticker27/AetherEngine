@@ -63,6 +63,12 @@ public final class SandboxStore {
     }
 
     // ── root/data/user[_de]/0/<pkg> ─────────────────────────────
+    public static File guestUserDataDir(Context c, String pkg) {
+        File d = new File(new File(new File(root(c), "data/user/0"), pkg), "");
+        if (!d.exists()) d.mkdirs();
+        return d;
+    }
+
     public static void ensureGuestLayout(Context c, String pkg) {
         mkdirs(guestDir(c, pkg));
         mkdirs(guestLibDir(c, pkg));
