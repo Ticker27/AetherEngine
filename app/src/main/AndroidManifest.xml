@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AetherEngine manifest — โครงสร้างมาจาก แบบจำลองอ้างอิง (container engine) (แบบจำลองอ้างอิง) ฉบับลดความซับซ้อน
+     ตัดออก: 180 permissions → 7, VPN, Firebase, Proxy P0-P3 ×4 process, FileProvider/badge libs -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- parity กับความจำเป็นของ container + keep-alive mechanism เท่านั้น -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <application
+        android:name="com.aether.App"
+        android:label="@string/app_name"
+        android:icon="@android:drawable/sym_def_app_icon"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar"
+        android:allowBackup="false"
+        android:usesCleartextTraffic="false">
+
+        <!-- parity: com.Entry (FlutterActivity) → MainActivity + CommandRouter -->
+        <activity
+            android:name="com.aether.MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:screenOrientation="portrait">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- parity: ProxyActivity$P0 → stub เปิดแอปใน container (1 process แทน :p0-p3) -->
+        <activity
+            android:name="com.aether.container.VStubActivity"
+            android:exported="false"
+            android:configChanges="0x40003FB4" />
+
+        <!-- parity: SystemCallProvider ของแบบจำลอง (:helper, exported) -->
+        <provider
+            android:name="com.aether.helper.SystemCallProvider"
+            android:authorities="com.aether.helper.SystemCallProvider"
+            android:process=":helper"
+            android:exported="true" />
+
+        <!-- parity: DaemonService + DaemonInnerService (:helper, foreground keep-alive) -->
+        <service
+            android:name="com.aether.helper.DaemonService"
+            android:process=":helper"
+            android:exported="false"
+            android:foregroundServiceType="specialUse|dataSync">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="engine_keepalive" />
+        </service>
+        <service
+            android:name="com.aether.helper.DaemonInnerService"
+            android:process=":helper"
+            android:exported="false" />
+    </application>
+</manifest>

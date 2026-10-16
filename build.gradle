@@ -1,0 +1,4 @@
+// AetherEngine — root build.gradle (ต้นแบบโครงสร้าง: แบบจำลองอ้างอิง (container engine), ฉบับลดความซับซ้อน ไม่มีระบบ license)
+plugins {
+    id 'com.android.application' version '8.5.2' apply false
+}

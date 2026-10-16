@@ -1,0 +1,36 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.aether'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.aether"   // parity: แบบจำลองอ้างอิง
+        minSdk 28                        // parity: minSdk 28
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+        ndk { abiFilters 'arm64-v8a' }   // parity: arm64-v8a only
+    }
+
+    externalNativeBuild {
+        cmake {
+            path 'src/main/cpp/CMakeLists.txt'
+            version '3.22.1'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// ไม่มี external dependencies ทั้งหมด (ต้นแบบพึ่ง androidx + firebase — ตัดเพื่อลดความซับซ้อน)
+dependencies {}
