@@ -5,10 +5,11 @@ import android.content.Context;
 /**
  * parity: Native bridge ของแบบจำลอง (JNI bridge ผูกผ่าน RegisterNatives)
  *
- * AetherEngine รวมเหลือ 8 native methods — ตัดออก:
+ * ชุด method ตรงกับตารางที่ยืนยันจากหลักฐาน live: chl djp ac awl i eio aior ic ilil pjowqpxe (10 ตัว)
+ * ตัดออก:
  *   logIn(String,long) / logIn(String,long,boolean)   ← ระบบ login key/license (ไม่เอา)
- *   update(Object,Method)                              ← reflection pool สำหรับ AMS/PMS hook ของ container framework ของแบบจำลอง เต็มรูป
- * และ gcuid(int) ยังเป็น pure Java เหมือนต้นแบบ
+ *   update(Object,Method)                              ← reflection pool สำหรับ hook ของ container framework เต็มรูป
+ * และ gcuid(int) ยังเป็น pure Java (Settings$Secure + ro.product.* ผ่าน reflection) ตามหลักฐาน
  *
  * ไม่มี Java_com_aether_helper_Native_* export — ผูกผ่าน JNI_OnLoad → RegisterNatives
  * ใน libaether.so ให้เหมือนโครงสร้างต้นแบบ (dynamic registration, anti-grep ระดับหนึ่ง)
@@ -31,7 +32,11 @@ public final class Native {
     public static native void eio();                    // flush native log buffer
     public static native void awl(String s);            // log/track string (ต้นแบบ: awl(String))
     public static native void aior(String a, String b); // log/track pair (ต้นแบบ: aior(String,String))
-    public static native void ac(Object a, Object b);   // generic callback sink (ต้นแบบ: ac(Object,Object))
+    public static native void ac(Object a, Object b);   // generic callback sink
+
+    // ── engine ops เต็มชุดตามหลักฐาน live table ───────────────────
+    public static native void i(int config);                        // int config ของ engine (sig (I)V)
+    public static native void pjowqpxe(Object a, Object b, Object c); // 3-arg sink (sig (LOO)V)
 
     // ── pure Java (parity: gcuid เป็น Java ล้วนในต้นแบบ) ─────────
     public static int gcuid(int seed) {

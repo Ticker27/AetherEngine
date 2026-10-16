@@ -53,6 +53,7 @@ class _HomePageState extends State<HomePage> {
                 FilledButton(onPressed: () => _run('"I" pick image', () => EngineChannel.pickImage()), child: const Text('I · pick image')),
                 FilledButton(onPressed: () => _run('"J" zip share', () => EngineChannel.zipShare()), child: const Text('J · zip share')),
                 FilledButton(onPressed: () => _run('"K" pick apk', () => EngineChannel.pickApk()), child: const Text('K · pick apk')),
+                FilledButton(onPressed: () => _run('"L" device', () => EngineChannel.deviceInfo()), child: const Text('L · device')),
               ],
             ),
           ),

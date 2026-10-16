@@ -27,6 +27,7 @@ import com.aether.helper.Native;
  *   "I"  → image picker (activity result 1000 flow)
  *   "J"  → zip + share (4 KB buffer → chooser)
  *   "K"  → APK picker → install เข้า container
+ *   "L"  → device fingerprint (reflection, อ่านอย่างเดียว)
  *
  * ตัดออก: code ที่ผูกกับระบบ login key/license ไม่มีในตาราง ไม่มี backend call ใด ๆ
  */
@@ -96,6 +97,8 @@ public final class CommandRouter {
                 }
                 return "apk-picker";
             }
+            case "L":                                     // device fingerprint (reflection — อ่านอย่างเดียว)
+                return com.aether.util.DeviceRegistry.summary(ctx);
             default:
                 return null;                              // ต้นแบบ: unknown code → ไม่ทำอะไร
         }

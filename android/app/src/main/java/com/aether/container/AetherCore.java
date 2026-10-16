@@ -51,10 +51,11 @@ public final class AetherCore {
         }
     }
 
-    /** parity: core post-init: อ่าน registry ของ container ที่ติดตั้งไว้ */
+    /** parity: core post-init: อ่าน registry ของ container ที่ติดตั้งไว้ + fingerprint เครื่อง (อ่านอย่างเดียว) */
     public static void postInit(Context ctx) {
         List<JSONObject> apps = listRegistry(ctx);
         android.util.Log.i("AetherEngine", "AetherCore.postInit: " + apps.size() + " container app(s)");
+        android.util.Log.i("AetherEngine", "device: " + com.aether.util.DeviceRegistry.summary(ctx));
     }
 
     public static String engineVersion() { return "AetherEngine 1.0.0 (structural model)"; }

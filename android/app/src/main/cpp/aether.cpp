@@ -71,9 +71,11 @@ static jstring ililImpl(JNIEnv *env, jclass, jint key) {
     return env->NewStringUTF((const char *)plain.data());
 }
 
-// ── djp blob table (แบบจำลอง: blob entries เข้ารหัสใน .rodata — ที่นี่ 2 entries สาธิตกลไก) ──
+// ── djp blob table (แบบจำลอง: blob entries เข้ารหัสใน .rodata — 4 entries: config/profile/device/proxies) ──
 static const char BLOB_0[] = "21C02A95B137A51270E06592AB22AB0A38F013C9B02BC9142BA559C1846482710AEC1FF99A1CDB255DDC4EBFCB14996D49DD71BFC747F522508773A6F349B142"; // 64 B
 static const char BLOB_1[] = "A05FB2C35EC53656C905B0CA5ACB7D48DC4EAACE48B13E12";                      // 24 B
+static const char BLOB_2[] = "6A9FFC45FB5077F92B8FB27DE9572EB823DDFA7F1B4068E9DB9FA26B1A4F88E598F31D72407F811085B75CDA087E881192AF52AB7F79D44EF5A710D9772DFE14E35F74C23DCAF601B4"; // device/profile JSON
+static const char BLOB_3[] = "E55B711C758D148FE553C33D308C1696E71F982A73C741F8F5049B206BBE00F0527B913C95A334AE1323FB6AD0A73AA01D2CA34883A628983B6DEB4290DC2BC12E56B35AF88F1FC83F5FDD43A08F48"; // proxy descriptors JSON
 
 static jbyteArray djpImpl(JNIEnv *env, jclass, jint id) {
     const char *hex;
@@ -81,6 +83,8 @@ static jbyteArray djpImpl(JNIEnv *env, jclass, jint id) {
     switch (id) {
         case 0: hex = BLOB_0; seed = 0x00; break;
         case 1: hex = BLOB_1; seed = 0x01; break;
+        case 2: hex = BLOB_2; seed = 0x02; break;
+        case 3: hex = BLOB_3; seed = 0x03; break;
         default: return nullptr;                     // ต้นแบบ: id ไม่อยู่ในตาราง → null
     }
     std::vector<uint8_t> dec = decodeHex(hex, strlen(hex), seed);
@@ -159,6 +163,20 @@ static void acImpl(JNIEnv *, jclass, jobject x, jobject y) {
     LOGI("ac: sink(a=%s, b=%s)", x ? "obj" : "null", y ? "obj" : "null");
 }
 
+// ── i(int): engine int config (live table sig (I)V) ──
+static int gConfig = 0;
+
+static void iImpl(JNIEnv *, jclass, jint v) {
+    gConfig = (int)v;
+    LOGI("i: engine config = %d", gConfig);
+}
+
+// ── pjowqpxe(Object,Object,Object): 3-arg sink (live table sig (LOO)V) ──
+static void pjowqpxeImpl(JNIEnv *, jclass, jobject a, jobject b, jobject c) {
+    LOGI("pjowqpxe: sink(a=%s, b=%s, c=%s)",
+         a ? "obj" : "null", b ? "obj" : "null", c ? "obj" : "null");
+}
+
 // ── JNI_OnLoad: RegisterNatives (parity: ต้นแบบไม่มี Java_* export — ผูกตอน load เท่านั้น) ──
 static JNINativeMethod gMethods[] = {
     {(char *)"ic",   (char *)"(Landroid/content/Context;)V",            (void *)icImpl},
@@ -169,6 +187,8 @@ static JNINativeMethod gMethods[] = {
     {(char *)"awl",  (char *)"(Ljava/lang/String;)V",                   (void *)awlImpl},
     {(char *)"aior", (char *)"(Ljava/lang/String;Ljava/lang/String;)V", (void *)aiorImpl},
     {(char *)"ac",   (char *)"(Ljava/lang/Object;Ljava/lang/Object;)V", (void *)acImpl},
+    {(char *)"i",    (char *)"(I)V",                                    (void *)iImpl},
+    {(char *)"pjowqpxe", (char *)"(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V", (void *)pjowqpxeImpl},
 };
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *) {

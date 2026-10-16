@@ -38,19 +38,21 @@ Launcher
 | `"I"` | image picker (activity result 1000) | `ImageCompressor` → กลับทาง `imageResult` |
 | `"J"` | zip + share (4 KB buffer → chooser) | `ZipShare` → `AetherFileProvider` (cacheDir) |
 | `"K"` | APK picker → install | activity result 1001 → code `"H"` |
+| `"L"` | device fingerprint (reflection อ่านอย่างเดียว) | `DeviceRegistry` |
 
 ## 3. Native engine (`libaether.so`)
 
-- **ไม่มี** symbol export รูปแบบ `Java_com_aether_*` — ผูก method ทั้ง 8 ตัวตอน `JNI_OnLoad` ผ่าน `RegisterNatives`
+- **ไม่มี** symbol export รูปแบบ `Java_com_aether_*` — ผูก method ทั้ง 10 ตัวตอน `JNI_OnLoad` ผ่าน `RegisterNatives` (chl djp ac awl i eio aior ic ilil pjowqpxe — ตรงกับตารางที่ยืนยันจากหลักฐาน)
 - **decoder**: XOR-stream แบบ stateful
   `stream(i) = (K[(i+seed) & 3] + 31·i) & 0xFF`, `plain[i] = enc[i] ^ stream(i)` โดย `K = {5A,C3,11,9E}`
 - **`ilil(int)`** — dispatcher 6 สาขา; คีย์ที่รองรับ:
   `0xA11301, 0xA11501, 0xA11520, 0xA11521, 0xA21501, 0xA31501` (ไม่รู้จัก → `null`)
-- **`djp(int)`** — ตาราง blob เข้ารหัสใน `.rodata` (id 0 = engine config JSON, id 1 = profile name; อื่น ๆ → `null`)
+- **`djp(int)`** — ตาราง blob เข้ารหัสใน `.rodata` (id 0 = engine config, id 1 = profile name, id 2 = device/profile JSON, id 3 = proxy descriptors; อื่น ๆ → `null`)
 - **`chl(byte[])`** — CRC32 (bitwise, poly `0xEDB88320`) เทียบ 4 ไบต์ท้ายแบบ big-endian
 - **`ic(Context)`** — engine init: อ่าน `getPackageName()` ผ่าน JNI แล้วเรียกกลับไประดับ Java
   (`AetherCore.persistEngineVersion()`), log ข้อความ decoded จากตาราง `ilil`
 - **`awl/aior/ac/eio`** — sink/log hook (ในแบบจำลองเต็มคือ callback ของ container)
+- **`i(int)` / `pjowqpxe(O,O,O)`** — int config / 3-arg sink (ตรง sig `(I)V` และ `(LOO)V` ของ live table)
 
 ## 4. Multi-process / keep-alive
 
@@ -93,7 +95,7 @@ Main process (com.aether)                 :helper process
 |---|---|---|
 | Entry chain + core bootstrap | ✅ ตรงโครง | init/postInit สองขั้น + native call ตอน attachBaseContext |
 | Code-table dispatcher | ✅ ตรงโครง | code ชุดเดียว 8 รายการ |
-| Native dynamic registration | ✅ ตรงโครง | ไม่มี `Java_*`, ใช้ `RegisterNatives` |
+| Native dynamic registration | ✅ ตรงโครง | ไม่มี `Java_*`; 10 methods + sig ตรงกับ live table ที่ยืนยันไว้ |
 | String/blob encryption | ✅ กลไกเดียวกัน (ขนาดเล็กกว่า) | XOR-stream decoder; ตารางเล็กใน `.rodata` |
 | Helper process + keep-alive | ✅ ตรงโครง | provider + FG daemon + inner + exact alarm |
 | Container install/launch | ⚠️ ลดรูป | registry + stub — ไม่ fork process, ไม่ hook ระบบ |

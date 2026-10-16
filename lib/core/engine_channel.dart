@@ -36,6 +36,7 @@ class EngineChannel {
   static Future<String?> pickImage() => dispatch('I');
   static Future<String?> zipShare([String? path]) => dispatch('J', path);
   static Future<String?> pickApk() => dispatch('K');
+  static Future<String?> deviceInfo() => dispatch('L');
 
   /// รับผลจากฝั่ง host (เช่น ผลย่อรูปจาก code "I")
   static void onImageResult(void Function(String payload) cb) {
