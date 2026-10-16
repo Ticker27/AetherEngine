@@ -16,8 +16,22 @@ import android.content.Context;
  */
 public final class Native {
 
+    private static boolean sLoaded = false;
+
     static {
-        System.loadLibrary("aether");   // libaether.so
+        // โหลดแบบกันตาย: .so มีปัญหา (ABI/align/โหลดไม่ได้) ต้องไม่ทำให้แอปตายตอนเปิด
+        try {
+            System.loadLibrary("aether");   // libaether.so
+            sLoaded = true;
+        } catch (Throwable t) {
+            sLoaded = false;
+            android.util.Log.e("AetherEngine", "libaether load failed — pure-Java mode: " + t);
+        }
+    }
+
+    /** ใช้เช็คก่อนเรียก native ทุกจุด */
+    public static boolean isAvailable() {
+        return sLoaded;
     }
 
     // ── engine init ────────────────────────────────────────────────

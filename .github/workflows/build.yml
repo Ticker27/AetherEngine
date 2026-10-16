@@ -33,8 +33,8 @@ jobs:
       - name: Flutter analyze (gate)
         run: flutter analyze --no-pub
 
-      - name: Build debug APK (arm64-v8a)
-        run: flutter build apk --debug --target-platform android-arm64 --no-pub
+      - name: Build release APK (arm64-v8a, AOT — no debug engine/VkLayer bloat)
+        run: flutter build apk --release --target-platform android-arm64 --no-pub
 
       - name: Smoke — verify engine .so + flutter assets in APK
         run: |
@@ -75,8 +75,37 @@ jobs:
           sys.exit(fail)
           PY
 
+      - name: Smoke — verify 16KB page alignment of native libs
+        run: |
+          APK=$(ls build/app/outputs/flutter-apk/*.apk | head -1)
+          rm -rf /tmp/so && mkdir -p /tmp/so
+          unzip -o -q "$APK" 'lib/arm64-v8a/libaether.so' 'lib/arm64-v8a/libflutter.so' -d /tmp/so
+          python3 - <<'PY'
+          import struct, sys
+          def loads_align(path):
+              d = open(path, 'rb').read()
+              e_phoff = struct.unpack('<Q', d[32:40])[0]
+              e_phentsize = struct.unpack('<H', d[54:56])[0]
+              e_phnum = struct.unpack('<H', d[56:58])[0]
+              al = []
+              for i in range(e_phnum):
+                  o = e_phoff + i * e_phentsize
+                  if struct.unpack('<I', d[o:o+4])[0] == 1:
+                      al.append(struct.unpack('<Q', d[o+48:o+56])[0])
+              return al
+          fail = 0
+          for name, enforce in (('libaether.so', True), ('libflutter.so', False)):
+              al = loads_align('/tmp/so/lib/arm64-v8a/' + name)
+              ok = all(a >= 0x4000 for a in al)
+              print(('OK  ' if ok else 'NOTE'), name, [hex(a) for a in al])
+              if enforce and not ok:
+                  print('ENFORCE FAIL:', name)
+                  fail = 1
+          sys.exit(fail)
+          PY
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AetherEngine-debug-apk
+          name: AetherEngine-apk
           path: build/app/outputs/flutter-apk/*.apk

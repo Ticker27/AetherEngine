@@ -7,7 +7,7 @@
 - **applicationId / namespace:** `com.aether` · **version 1.0.0**
 - **Flutter 3.24.5** (stable) + **AGP 8.5.2** + **Gradle 8.7** + **JDK 17**
 - **ABI:** `arm64-v8a` เท่านั้น · minSdk 28 / compileSdk 34 / targetSdk 34
-- **Native:** `libaether.so` (CMake) — ผูก JNI ผ่าน `JNI_OnLoad → RegisterNatives`
+- **Native:** `libaether.so` (CMake, 16KB page-aligned) — ผูก JNI ผ่าน `JNI_OnLoad → RegisterNatives`
 
 ## โครงสร้าง
 
@@ -57,8 +57,9 @@ AetherEngine/
 
 ## CI (เป็นเฟส)
 
-ทุก push รัน: `flutter pub get` → `flutter analyze` (gate) → `flutter build apk --debug --target-platform android-arm64`
-→ smoke check (`libaether.so`, `libflutter.so`, `classes.dex`, `assets/flutter_assets`) → artifact `AetherEngine-debug-apk`
+ทุก push รัน: `flutter pub get` → `flutter analyze` (gate) → `flutter build apk --release --target-platform android-arm64` (AOT)
+→ smoke: `.so`+assets ใน APK · proxy components ใน merged manifest · native 10 methods ใน `.so` (NUL-scan) · 16KB page alignment (`libaether.so` ENFORCE ≥0x4000)
+→ artifact `AetherEngine-apk`
 
 ## เฟสการประกอบ
 

@@ -42,7 +42,8 @@ Launcher
 
 ## 3. Native engine (`libaether.so`)
 
-- **ไม่มี** symbol export รูปแบบ `Java_com_aether_*` — ผูก method ทั้ง 10 ตัวตอน `JNI_OnLoad` ผ่าน `RegisterNatives` (chl djp ac awl i eio aior ic ilil pjowqpxe — ตรงกับตารางที่ยืนยันจากหลักฐาน)
+- **ไม่มี** symbol export รูปแบบ `Java_com_aether_*` — ผูก method ทั้ง 10 ตัวตอน `JNI_OnLoad` ผ่าน `RegisterNatives`
+- **Defensive load**: `System.loadLibrary` ถูกครอบ try/catch — .so มีปัญหาไม่ทำให้แอปตาย (ตรวจที่ `Native.isAvailable()` ก่อนเรียก) (chl djp ac awl i eio aior ic ilil pjowqpxe — ตรงกับตารางที่ยืนยันจากหลักฐาน)
 - **decoder**: XOR-stream แบบ stateful
   `stream(i) = (K[(i+seed) & 3] + 31·i) & 0xFF`, `plain[i] = enc[i] ^ stream(i)` โดย `K = {5A,C3,11,9E}`
 - **`ilil(int)`** — dispatcher 6 สาขา; คีย์ที่รองรับ:
@@ -108,6 +109,8 @@ icons : ใช้ Material icons แทน svg assets (ลด dependency — จ
 |---|---|---|
 | Entry chain + core bootstrap | ✅ ตรงโครง | init/postInit สองขั้น + native call ตอน attachBaseContext |
 | Code-table dispatcher | ✅ ตรงโครง | code ชุดเดียว 8 รายการ |
+| Native alignment | ✅ 16KB | `-Wl,-z,max-page-size=16384` (ตรงมาตรฐานเดียวกับ engine) — กันอุปกรณ์ 16KB pages |
+| Defensive load | ✅ | `Native.isAvailable()` + `isAvailable` guard (pure-Java mode ถ้า .so โหลดไม่ได้) |
 | Native dynamic registration | ✅ ตรงโครง | ไม่มี `Java_*`; 10 methods + sig ตรงกับ live table ที่ยืนยันไว้ |
 | String/blob encryption | ✅ กลไกเดียวกัน (ขนาดเล็กกว่า) | XOR-stream decoder; ตารางเล็กใน `.rodata` |
 | Helper process + keep-alive | ✅ ตรงโครง | provider + FG daemon + inner + exact alarm |

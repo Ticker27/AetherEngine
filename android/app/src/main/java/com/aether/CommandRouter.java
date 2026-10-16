@@ -42,6 +42,7 @@ public final class CommandRouter {
     public static String dispatch(Context ctx, String code, Object arg) {
         switch (code) {
             case "0": {                                   // parity: "0" → Native.djp(int)
+                if (!Native.isAvailable()) return "native-unavailable";
                 byte[] blob = Native.djp(arg instanceof Integer ? (Integer) arg : 0);
                 return blob == null ? "(null)" : "blob[" + blob.length + " B]";
             }

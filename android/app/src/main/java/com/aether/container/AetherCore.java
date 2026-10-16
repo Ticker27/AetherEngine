@@ -44,8 +44,12 @@ public final class AetherCore {
         if (sInit) return;
         synchronized (AetherCore.class) {
             if (sInit) return;                 // parity: double-checked init เหมือน __cxa_guard
-            sCtx = ctx.getApplicationContext();
-            ((Application) sCtx).registerActivityLifecycleCallbacks(new AppLifecycleLogger());
+            // ในช่วง Application.attachBaseContext: getApplicationContext() ยังเป็น null — fallback เป็น ctx ตรง ๆ
+            Context appCtx = ctx.getApplicationContext();
+            sCtx = appCtx != null ? appCtx : ctx;
+            if (ctx instanceof Application) {
+                ((Application) ctx).registerActivityLifecycleCallbacks(new AppLifecycleLogger());
+            }
             sInit = true;
             android.util.Log.i("AetherEngine", "AetherCore.init done");
         }

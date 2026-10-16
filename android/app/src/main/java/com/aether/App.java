@@ -23,8 +23,14 @@ public class App extends android.app.Application {
     @Override
     protected void attachBaseContext(Context base) {
         super.attachBaseContext(base);
-        AetherCore.init(base);          // parity: core init
-        Native.ic(base);               // parity: ic() = engine native init hook (RegisterNatives หลัง System.load)
+        // สำคัญ: ในช่วง attachBaseContext — getApplicationContext() ยังเป็น null (framework ตั้งค่าให้หลัง attach)
+        // จึงต้องส่ง Application นี้เอง (this) เข้า core/native ไม่ใช่ base
+        AetherCore.init(this);          // parity: core init
+        if (Native.isAvailable()) {
+            Native.ic(this);            // parity: ic() = engine native init hook (RegisterNatives หลัง System.load)
+        } else {
+            Log.w("AetherEngine", "native engine unavailable — running pure-Java mode");
+        }
     }
 
     @Override
