@@ -75,22 +75,15 @@ public final class IPackageManagerProxy implements InvocationHandler {
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
         String name = method.getName();
         try {
+            // นโยบาย: target pkg → ตอบจาก sandbox เสมอ (guest เห็น version เดียวกับ sandbox ไม่ใช่ของเครื่องนอก)
             if (sTargetPkg != null && args != null && args.length > 0
                     && sTargetPkg.equals(args[0])
                     && (name.equals("getPackageInfo") || name.equals("getApplicationInfo"))) {
-                try {
-                    return method.invoke(base, args);
-                } catch (java.lang.reflect.InvocationTargetException ite) {
-                    Throwable cause = ite.getCause();
-                    if (cause instanceof android.content.pm.PackageManager.NameNotFoundException) {
-                        Object forged = forge(method.getReturnType());
-                        if (forged != null) {
-                            android.util.Log.i(TAG, "fake/pms: forged " + name
-                                    + "(" + sTargetPkg + ") → sandbox " + sSandboxVersion);
-                            return forged;
-                        }
-                    }
-                    throw cause;
+                Object forged = forge(method.getReturnType());
+                if (forged != null) {
+                    android.util.Log.i(TAG, "fake/pms: answer " + name
+                            + "(" + sTargetPkg + ") from sandbox " + sSandboxVersion);
+                    return forged;
                 }
             }
         } catch (Throwable t) {

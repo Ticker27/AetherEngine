@@ -101,10 +101,20 @@ public final class HookManager {
                 f.setAccessible(true);
                 Handler h = (Handler) f.get(at);
                 if (h != null) {
-                    h.getClass().getMethod("setCallback", Handler.Callback.class)
-                            .invoke(h, new HCallbackLogger());
-                    hcb = true;
-                    android.util.Log.i(TAG, "fake: HCallback attached (mH)");
+                    Field cbField = null;
+                    for (Class<?> c = h.getClass(); c != null; c = c.getSuperclass()) {
+                        try {
+                            cbField = c.getDeclaredField("mCallback");
+                            break;
+                        } catch (NoSuchFieldException ignored) {
+                        }
+                    }
+                    if (cbField != null) {
+                        cbField.setAccessible(true);
+                        cbField.set(h, new HCallbackLogger());
+                        hcb = true;
+                        android.util.Log.i(TAG, "fake: HCallback attached (mH.mCallback)");
+                    }
                 }
             } catch (Throwable t) {
                 android.util.Log.w(TAG, "fake: mH callback failed: " + t);

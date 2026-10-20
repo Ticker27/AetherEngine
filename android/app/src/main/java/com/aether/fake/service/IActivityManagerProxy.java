@@ -60,11 +60,20 @@ public final class IActivityManagerProxy implements InvocationHandler {
                 setm.setAccessible(true);
                 setm.invoke(singleton, proxy);
                 set = true;
-            } catch (Throwable t) {
-                Field mInst = singleton.getClass().getDeclaredField("mInstance");
-                mInst.setAccessible(true);
-                mInst.set(singleton, proxy);
-                set = true;
+            } catch (Throwable t1) {
+                for (Class<?> c = singleton.getClass(); c != null; c = c.getSuperclass()) {
+                    try {
+                        Field mInst = c.getDeclaredField("mInstance");
+                        mInst.setAccessible(true);
+                        mInst.set(singleton, proxy);
+                        set = true;
+                        break;
+                    } catch (NoSuchFieldException ignored) {
+                    }
+                }
+                if (!set) {
+                    android.util.Log.w(TAG, "fake/ams: cannot set singleton (" + singleton.getClass().getName() + ")");
+                }
             }
             sHooked = set;
             android.util.Log.i(TAG, "fake/ams: IActivityManager proxy installed=" + set
