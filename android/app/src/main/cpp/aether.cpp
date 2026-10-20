@@ -178,6 +178,36 @@ static void pjowqpxeImpl(JNIEnv *, jclass, jobject a, jobject b, jobject c) {
          a ? "obj" : "null", b ? "obj" : "null", c ? "obj" : "null");
 }
 
+// ── patchNative: register generic stubs ให้ native methods ของ guest class (ปลดล็อก clinit) ──
+static void nop8v(JNIEnv*, jobject, jint, jint, jint, jint, jint, jint, jint) {}
+static jboolean nop8z(JNIEnv*, jobject, jint, jint, jint, jint, jint, jint, jint) { return 0; }
+static jint nop8i(JNIEnv*, jobject, jint, jint, jint, jint, jint, jint, jint) { return 0; }
+static jlong nop8j(JNIEnv*, jobject, jint, jint, jint, jint, jint, jint, jint) { return 0; }
+static jfloat nop8f(JNIEnv*, jobject, jint, jint, jint, jint, jint, jint, jint) { return 0; }
+static jdouble nop8d(JNIEnv*, jobject, jint, jint, jint, jint, jint, jint, jint) { return 0; }
+static jobject nop8l(JNIEnv*, jobject, jint, jint, jint, jint, jint, jint, jint) { return nullptr; }
+
+static void patchNativeImpl(JNIEnv *env, jclass, jclass target, jstring name, jstring sig, jint kind) {
+    const char *cn = env->GetStringUTFChars(name, nullptr);
+    const char *cs = sig ? env->GetStringUTFChars(sig, nullptr) : "()V";
+    JNINativeMethod m;
+    m.name = const_cast<char *>(cn);
+    m.signature = const_cast<char *>(cs);
+    switch (kind) {
+        case 1: m.fnPtr = (void *)nop8z; break;
+        case 2: m.fnPtr = (void *)nop8i; break;
+        case 3: m.fnPtr = (void *)nop8j; break;
+        case 4: m.fnPtr = (void *)nop8f; break;
+        case 5: m.fnPtr = (void *)nop8d; break;
+        case 6: m.fnPtr = (void *)nop8l; break;
+        default: m.fnPtr = (void *)nop8v; break;
+    }
+    jint r = env->RegisterNatives(target, &m, 1);
+    LOGI("patchNative %s%s -> stub(kind=%d) r=%d", cn, cs, (int)kind, (int)r);
+    if (cn) env->ReleaseStringUTFChars(name, cn);
+    if (sig) env->ReleaseStringUTFChars(sig, cs);
+}
+
 // ── setEnv: ตั้ง environment variable ของ process (ใช้ตั้ง HOME ให้ guest loader) ──
 static void setEnvImpl(JNIEnv *env, jclass, jstring k, jstring v) {
     const char *ck = k ? env->GetStringUTFChars(k, nullptr) : nullptr;
@@ -203,6 +233,7 @@ static JNINativeMethod gMethods[] = {
     {(char *)"i",    (char *)"(I)V",                                    (void *)iImpl},
     {(char *)"pjowqpxe", (char *)"(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V", (void *)pjowqpxeImpl},
     {(char *)"setEnvNative", (char *)"(Ljava/lang/String;Ljava/lang/String;)V",            (void *)setEnvImpl},
+    {(char *)"patchNative", (char *)"(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/String;I)V", (void *)patchNativeImpl},
 };
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *) {

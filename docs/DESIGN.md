@@ -138,6 +138,27 @@ Data layer (parity):
     ลำดับ preload ของ module — เทียบเท่าแกนของ VA framework เต็มรูป
 ```
 
+## 7. Fake framework — port จาก KOS (parity com.kos.engine.fake)
+
+```
+com.aether.fake.FakeCore            ← com.kos.engine.fake.FakeCore (init)
+com.aether.fake.hook.HookManager    ← com.kos.engine.fake.hook.HookManager
+com.aether.fake.delegate.AppInstrumentation
+                                    ← com.kos.engine.fake.delegate.AppInstrumentation
+com.aether.fake.service.IActivityManagerProxy
+                                    ← IActivityManagerProxy + IBActivityManagerService$Stub$Proxy
+com.aether.fake.service.IPackageManagerProxy
+                                    ← IPackageManagerProxy + BPackageManager (forge จาก sandbox)
+```
+ติดตั้งใน `GuestLauncher` หลังสร้าง guest PathClassLoader ก่อน boot guest components (เฉพาะ :p0):
+1. `ActivityThread.mInstrumentation` → AppInstrumentation (guest newActivity ผ่าน guest loader)
+2. `ActivityManager.IActivityManagerSingleton` → proxy (log component ของ guest + passthrough)
+3. `ActivityThread.sPackageManager` → proxy (NameNotFound → forge PackageInfo จาก sandbox conf)
+4. `ActivityThread.mH` callback → HCallbackLogger (โครง redirect; consume=false)
+
+สถานะ Round 1: ติดตั้ง/มีผลจริง (device-proof), API ครบสำหรับต่อ Round 2
+(redirect ไป IBActivityThread/proxy :pN ตาม KOS)
+
 ## Level of parity
 
 | ชั้น | สถานะ | หมายเหตุ |

@@ -64,6 +64,21 @@ public final class Native {
 
     private static native void setEnvNative(String k, String v);
 
+    /** RegisterNatives ปลอม (stub) ให้ native methods ของ class ใน guest loader */
+    public static void patchNative(String cls, String name, String sig, int kind) {
+        if (!sLoaded) return;
+        try {
+            java.lang.ClassLoader cl = Thread.currentThread().getContextClassLoader();
+            Class<?> target = cl != null ? cl.loadClass(cls) : null;
+            if (target == null) return;
+            patchNative(target, name, sig, kind);
+        } catch (Throwable t) {
+            android.util.Log.w("AetherEngine", "patchNative(" + cls + "." + name + "): " + t);
+        }
+    }
+
+    private static native void patchNative(Class<?> target, String name, String sig, int kind);
+
     // ── pure Java (parity: gcuid เป็น Java ล้วนในต้นแบบ) ─────────
     public static int gcuid(int seed) {
         int h = seed ^ 0x5F3759DF;                      // (ต้นแบบใช้ค่าคงที่กลางๆ ประดิษฐ์เอง — คงกลไก เปลี่ยนค่า)

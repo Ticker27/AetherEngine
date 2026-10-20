@@ -121,6 +121,14 @@ public final class GuestLauncher {
             android.util.Log.i(TAG, "guest: PathClassLoader apk=" + apk.getAbsolutePath()
                     + " lib=" + libDir.getAbsolutePath());
 
+            // 4pre) fake framework (parity KOS: FakeCore → HookManager)
+            //       instrumentation + IAMS proxy + IPMS proxy + HCallback — เฉพาะ process นี้ (:p0)
+            try {
+                com.aether.fake.hook.HookManager.install(host, pkg, guestLoader);
+            } catch (Throwable t) {
+                android.util.Log.w(TAG, "fake framework install: " + t);
+            }
+
             // 4) โหลดคลาส launcher
             Class<?> actCls;
             try {
