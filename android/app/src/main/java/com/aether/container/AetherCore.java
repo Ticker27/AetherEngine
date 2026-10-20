@@ -126,9 +126,13 @@ public final class AetherCore {
         JSONObject st = SandboxStore.readPackageSetting(ctx, targetPkg);
         String ver = st != null ? st.optString("versionName", "?") : "?";
         TargetRegistry.Target t = TargetRegistry.byPkg(targetPkg);
-        if (t != null && !"?".equals(ver) && !ver.equals(t.pinVersion)) {
-            // parity: สภาพ "ล็อก" เมื่อเวอร์ชันไม่ตรง pin (หลักฐาน: กดแล้วไม่เข้า)
-            return "blocked:version-mismatch have=" + ver + " need=" + t.pinVersion;
+        if (t != null) {
+            VersionUtil.Result vr = VersionUtil.evaluate(ver, t.pinVersion, t.allowedVersions, t.versionPolicy);
+            if ("mismatch".equals(vr.state)) {
+                // parity: สภาพ "ล็อก" เมื่อเวอร์ชันไม่อยู่ในนโยบาย (หลักฐาน: กดแล้วไม่เข้า)
+                return "blocked:version-mismatch have=" + ver + " policy=" + t.versionPolicy
+                        + " allowed=" + java.util.Arrays.toString(t.allowedVersions);
+            }
         }
 
         SandboxStore.markLaunched(ctx, targetPkg, System.currentTimeMillis());
@@ -186,7 +190,10 @@ public final class AetherCore {
 
             TargetRegistry.Target t = TargetRegistry.byPkg(pkg);
             String pin = "n/a";
-            if (t != null) pin = ver.equals(t.pinVersion) ? "match" : ("mismatch(want=" + t.pinVersion + ")");
+            if (t != null) {
+                VersionUtil.Result vr = VersionUtil.evaluate(ver, t.pinVersion, t.allowedVersions, t.versionPolicy);
+                pin = vr.toString();
+            }
 
             JSONObject setting = new JSONObject();
             setting.put("apkPath", dstBase.getAbsolutePath());
@@ -289,10 +296,15 @@ public final class AetherCore {
                 o.put("sha256", sha == null ? JSONObject.NULL : sha);
                 String dv = installedVersion(ctx, t.pkg);
                 o.put("deviceVersion", dv == null ? JSONObject.NULL : dv);
+                o.put("policy", t.versionPolicy);
+                o.put("allowed", new org.json.JSONArray(java.util.Arrays.asList(t.allowedVersions)));
                 String status;
                 if (ver == null) status = "not-installed";
-                else if (ver.equals(t.pinVersion)) status = "match";
-                else status = "mismatch";
+                else {
+                    VersionUtil.Result vr = VersionUtil.evaluate(ver, t.pinVersion, t.allowedVersions, t.versionPolicy);
+                    status = vr.state;
+                    o.put("statusReason", vr.reason);
+                }
                 o.put("status", status);
             } catch (Exception e) {
                 o = new JSONObject();

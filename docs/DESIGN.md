@@ -192,6 +192,20 @@ UI: การ์ดเกมมีปุ่ม "Install from device" (l10n 4 ภ
 ```
 ปิดช่องเดิม: fixture ทดสอบไม่ใช้ไฟล์ /sdcard/Download อีก — ใช้ของที่ติดตั้งจริงบนเครื่องเท่านั้น
 
+## 10. Version subsystem (สมบูรณ์ก่อนชั้น plugin — A10)
+
+```
+TargetRegistry.Target = { id, name, pkg, pinVersion, allowedVersions[], versionPolicy(exact|listed|any), moduleVersion, icon }
+VersionUtil.evaluate(version, pin, allowed, policy) → Result{state: match|allowed|mismatch|unknown, reason}
+```
+หลักฐานที่ใช้ตั้งนโยบาย:
+- 8 Ball Pool: pin **56.31.0** (เป้าหมาย reference) · listed **{56.31.0, 56.31.1, 56.32.0}**
+  (56.32.0 = เวอร์ชันที่ติดตั้งจริงบนเครื่อง และตรงกับ entry ฝั่งต้นแบบ; 56.31.1 = เคสที่เคยพบใน install log)
+- Carrom 19.5.2 exact-listed · Soccer Stars 37.1.1
+
+ผลผูกเข้า 3 จุด: install (pin=Result), package.conf (pin), launch gate (block เฉพาะ state=mismatch),
+targetsSnapshot (status/statusReason/policy/allowed → UI chip เขียว=match · น้ำเงิน=allowed · ส้ม=mismatch)
+
 ## Level of parity
 
 | ชั้น | สถานะ | หมายเหตุ |

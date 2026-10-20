@@ -18,14 +18,19 @@ public final class TargetRegistry {
         public final String name;
         public final String pkg;
         public final String pinVersion;     // gameVersion ที่ pin ไว้ (56.31.0 สำหรับ 8BP)
+        public final String[] allowedVersions; // listed policy: เวอร์ชันที่ยอมรับเพิ่ม (หลักฐาน: 56.31.x + 56.32.0)
+        public final String versionPolicy;  // exact | listed | any
         public final String moduleVersion;  // module ที่สอดคล้อง
         public final String icon;
 
-        Target(String id, String name, String pkg, String pinVersion, String moduleVersion, String icon) {
+        Target(String id, String name, String pkg, String pinVersion, String[] allowedVersions,
+               String versionPolicy, String moduleVersion, String icon) {
             this.id = id;
             this.name = name;
             this.pkg = pkg;
             this.pinVersion = pinVersion;
+            this.allowedVersions = allowedVersions;
+            this.versionPolicy = versionPolicy;
             this.moduleVersion = moduleVersion;
             this.icon = icon;
         }
@@ -34,12 +39,14 @@ public final class TargetRegistry {
     private static final List<Target> TARGETS = new ArrayList<>();
 
     static {
+        // 8BP: pin 56.31.0 (เป้าหมาย reference) + listed 56.32.0 (เวอร์ชันที่ติดตั้งบนเครื่อง/entry ฝั่งต้นแบบ)
         TARGETS.add(new Target("eightballpool", "8 Ball Pool", "com.miniclip.eightballpool",
-                "56.31.0", "56.7.0", "eightballpool.png"));
+                "56.31.0", new String[]{"56.31.0", "56.32.0", "56.31.1"}, "listed",
+                "56.7.0", "eightballpool.png"));
         TARGETS.add(new Target("carrom", "Carrom Pool", "com.miniclip.carrom",
-                "19.5.2", "18.5.1", "carrom.png"));
+                "19.5.2", new String[]{"19.5.2"}, "listed", "18.5.1", "carrom.png"));
         TARGETS.add(new Target("soccerstars", "Soccer Stars", "com.miniclip.soccerstars",
-                "37.1.1", "36.5.2", "soccerstars.png"));
+                "37.1.1", new String[]{"37.1.1"}, "listed", "36.5.2", "soccerstars.png"));
     }
 
     private TargetRegistry() {}

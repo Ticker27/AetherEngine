@@ -62,6 +62,8 @@ class _HomePageState extends State<HomePage> {
     switch (status) {
       case 'match':
         return l.get('statusMatch');
+      case 'allowed':
+        return l.get('statusAllowed');
       case 'mismatch':
         return l.get('statusMismatch');
       default:
@@ -109,7 +111,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'pin ${t['pin']} · sandbox ${t['sandboxVersion'] ?? '—'} · device ${t['deviceVersion'] ?? '—'}',
+                      'pin ${t['pin']} (${t['policy']}) · sandbox ${t['sandboxVersion'] ?? '—'} · device ${t['deviceVersion'] ?? '—'}',
                       style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
                     ),
                     Row(
