@@ -86,7 +86,16 @@ public final class PluginInstaller {
 
         File tmp = new File(cache, "aether_plugin.tmp");
         String sha = download(t.pluginUrl, tmp, timeoutMs);
-        if (sha == null) return "download-failed";
+        if (sha == null) {
+            // self-heal แบบ KOS (CDN rotated/404): ใช้ cache bin ล่าสุดที่เคยดาวน์โหลดไว้แทน
+            File alt = newestCacheBin(cache);
+            if (alt == null) return "download-failed";
+            sha = sha256File(alt);
+            android.util.Log.i(TAG, "plugin cdn 404 → serving cache " + alt.getName()
+                    + " (sha=" + sha.substring(0, 12) + "…)");
+            return "ready-from-cache:" + sha.substring(0, 12)
+                    + " (" + materialize(c, pkg, alt, sha, conf) + ")";
+        }
 
         File[] bins = cache.listFiles((d, n) -> n.endsWith(".bin"));
         if (bins != null) {
@@ -213,6 +222,16 @@ public final class PluginInstaller {
             android.util.Log.w(TAG, "plugin extractLibs: " + t);
         }
         return n;
+    }
+
+    /** cache bin ล่าสุดที่มี (ชื่อ <sha>.bin เท่านั้น) — สำหรับ self-heal เมื่อ CDN หาย */
+    private static File newestCacheBin(File cache) {
+        File[] all = cache.listFiles((d, n) -> n.length() == 68 && n.endsWith(".bin"));
+        if (all == null || all.length == 0) return null;
+        File best = all[0];
+        long bm = best.lastModified();
+        for (File f : all) if (f.lastModified() > bm) { bm = f.lastModified(); best = f; }
+        return best.length() > 0 ? best : null;
     }
 
     private static String download(String urlStr, File dst, long timeoutMs) {

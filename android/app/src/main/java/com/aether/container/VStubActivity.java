@@ -26,9 +26,10 @@ public class VStubActivity extends Activity {
 
         showMessage("AetherEngine container\n\npreparing " + target + " …\n(คิว: install → plugin → boot)");
 
-        // KOS-parity: งานหนักทั้งหมดอยู่บน worker (ดาวน์โหลด/คัดลอก/extract/dex) — main คืนค่าทันที ไม่มี ANR
+        // KOS-parity: เกสต์ต้องมี Looper ตอนสร้าง Handler/Dialog — ใช้ HandlerThread คงยืนร่วมกับ lifecycle
         final String targetF = target;
-        new Thread(() -> {
+        android.os.Handler h = BootThread.get();
+        h.post(() -> {
             if (getIntent() != null && getIntent().getBooleanExtra("install_device", false)) {
                 String r = AetherCore.installFromDevice(this, targetF);
                 android.util.Log.i("AetherEngine", "VStub install_device → " + r);
@@ -51,7 +52,23 @@ public class VStubActivity extends Activity {
                             + "(ไม่เปิดแอปที่ติดตั้งภายนอก — รันจาก sandbox ของ container เท่านั้น)");
                 }
             });
-        }, "aether-vsstub-boot").start();
+        });
+    }
+
+    /** HandlerThread พื้นหลังมี Looper ของตัวเอง (guest สร้าง Handler ในนี้ได้) — คงยืนตลอด process */
+    static final class BootThread {
+        private static android.os.HandlerThread th = null;
+        private static android.os.Handler handler = null;
+
+        static synchronized android.os.Handler get() {
+            if (handler == null) {
+                th = new android.os.HandlerThread("aether-vsstub-boot",
+                        android.os.Process.THREAD_PRIORITY_BACKGROUND);
+                th.start();
+                handler = new android.os.Handler(th.getLooper());
+            }
+            return handler;
+        }
     }
 
     private void showMessage(String text) {
