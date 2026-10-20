@@ -81,6 +81,11 @@ public final class PluginLoader {
     }
 
     public static Result load(Context ctx, String pkg, ClassLoader guestLoader) {
+        return com.aether.util.RunOffMain.run(() -> loadInner(ctx, pkg, guestLoader),
+                120000L, new Result(false, null, 0, "load-timeout"), "plugin-load");
+    }
+
+    private static Result loadInner(Context ctx, String pkg, ClassLoader guestLoader) {
         File ws = PluginInstaller.workspace(ctx, pkg);
         File apk = newestPluginApk(ws);
         if (apk == null) return new Result(false, null, 0, "no-plugin-apk");

@@ -63,21 +63,25 @@ public final class AetherCore {
         android.util.Log.i("AetherEngine", "device: " + com.aether.util.DeviceRegistry.summary(ctx));
         seedTargetIcons(ctx);
 
-        // ให้โครง sandbox ครบ parity (kos_engine layout) และตรงกับ guest ที่มีอยู่จริง
-        try {
-            SandboxStore.ensureBaseLayout(ctx);
-            int n = 0;
-            for (TargetRegistry.Target t : TargetRegistry.all()) {
-                if (SandboxStore.guestApk(ctx, t.pkg).exists()) {
-                    SandboxStore.ensureGuestLayout(ctx, t.pkg);
-                    n++;
+        // KOS-parity: bootstrap sandbox เองหลังหน้าจอพร้อม (ไปทำบน worker — ไม่กิน main)
+        final Context appCtx = ctx.getApplicationContext();
+        Thread boot = new Thread(() -> {
+            try {
+                SandboxStore.ensureBaseLayout(appCtx);
+                int n = 0;
+                for (TargetRegistry.Target t : TargetRegistry.all()) {
+                    if (SandboxStore.guestApk(appCtx, t.pkg).exists()) {
+                        SandboxStore.ensureGuestLayout(appCtx, t.pkg);
+                        n++;
+                    }
                 }
+                android.util.Log.i("AetherEngine", "sandbox: base layout ready, guests=" + n);
+                com.aether.util.LogDump.engine(appCtx, "postInit sandbox ready guests=" + n);
+            } catch (Throwable t) {
+                android.util.Log.w("AetherEngine", "sandbox ensure: " + t);
             }
-            android.util.Log.i("AetherEngine", "sandbox: base layout ready, guests=" + n);
-            com.aether.util.LogDump.engine(ctx, "postInit sandbox ready guests=" + n);
-        } catch (Throwable t) {
-            android.util.Log.w("AetherEngine", "sandbox ensure: " + t);
-        }
+        }, "aether-boot");
+        boot.start();
     }
 
     /** seed ไอคอนเป้าหมายจาก assets → ContentCache (files/<sha256>) — กลไกเดียวกับแคช asset ของต้นแบบ */
@@ -111,7 +115,9 @@ public final class AetherCore {
 
     /** parity: "H" → core install routine — VirtualInstaller: install APK เข้า container */
     public static String installFromUri(Context ctx, Uri apkUri) {
-        return VPackageInstaller.install(ctx, apkUri);
+        // KOS-parity: copy 174MB บน main จะ ANR — ย้ายลง worker (join 10 นาที)
+        return com.aether.util.RunOffMain.run(() -> VPackageInstaller.install(ctx, apkUri),
+                600000L, "ERR:timeout(10m)", "install-uri");
     }
 
     /**
@@ -162,6 +168,11 @@ public final class AetherCore {
      * หลักฐาน: ai.sourceDir + pi.splitSourceDirs/splitNames — ไม่ดึงจากไฟล์ภายนอก
      */
     public static String installFromDevice(Context ctx, String pkg) {
+        return com.aether.util.RunOffMain.run(() -> installFromDeviceInner(ctx, pkg),
+                600000L, "ERR:timeout(10m)", "install-device");
+    }
+
+    private static String installFromDeviceInner(Context ctx, String pkg) {
         try {
             PackageManager pm = ctx.getPackageManager();
             PackageInfo pi = pm.getPackageInfo(pkg, 0);

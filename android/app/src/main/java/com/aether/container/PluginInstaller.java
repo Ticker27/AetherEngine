@@ -51,8 +51,13 @@ public final class PluginInstaller {
         return d;
     }
 
-    /** ทำให้พร้อม: cache → verify → materialize workspace → prefs/vm config. คืนสถานะสั้น ๆ */
+    /** state machine ของปลั๊กอิน (KOS-parity): verify → reuse/re-materialize/download อัตโนมัติ ตามสิ่งที่มีจริง */
     public static String ensurePlugin(Context c, String pkg, long timeoutMs) {
+        return com.aether.util.RunOffMain.run(() -> ensurePluginInner(c, pkg, timeoutMs),
+                timeoutMs + 60000L, "ensure-timeout", "plugin-ensure");
+    }
+
+    private static String ensurePluginInner(Context c, String pkg, long timeoutMs) {
         TargetRegistry.Target t = TargetRegistry.byPkg(pkg);
         if (t == null || t.pluginUrl == null) return "n/a";
         SandboxStore.ensureBaseLayout(c);
@@ -65,14 +70,22 @@ public final class PluginInstaller {
 
         if (recSha != null && recSha.length() == 64) {
             File cached = new File(cache, recSha + ".bin");
+            boolean reuse = false;
             if (cached.exists() && cached.length() > 0) {
+                String actual = sha256File(cached);
+                reuse = recSha.equals(actual);
+                android.util.Log.i(TAG, "plugin cache verify: " + recSha.substring(0, 12)
+                        + " → " + (reuse ? "ok" : "corrupt (download ใหม่)"));
+            }
+            if (reuse) {
                 return "ready:" + recSha.substring(0, 12)
                         + " (" + materialize(c, pkg, cached, recSha, conf) + ")";
             }
+            // self-heal: workspace หาย/ไม่ครบ แต่ cache ยังอยู่ → materialize จาก cache ให้ใหม่
         }
 
         File tmp = new File(cache, "aether_plugin.tmp");
-        String sha = downloadOffMain(t.pluginUrl, tmp, timeoutMs);
+        String sha = download(t.pluginUrl, tmp, timeoutMs);
         if (sha == null) return "download-failed";
 
         File[] bins = cache.listFiles((d, n) -> n.endsWith(".bin"));
@@ -202,23 +215,6 @@ public final class PluginInstaller {
         return n;
     }
 
-    /** รัน download ให้พ้น main thread (กัน NetworkOnMainThreadException เมื่อถูกเรียกจาก Activity) */
-    private static String downloadOffMain(final String url, final File dst, final long timeoutMs) {
-        if (android.os.Looper.myLooper() == null
-                || android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
-            return download(url, dst, timeoutMs);
-        }
-        final String[] out = new String[1];
-        Thread th = new Thread(() -> out[0] = download(url, dst, timeoutMs), "aether-plugin-dl");
-        th.start();
-        try {
-            th.join(Math.max(30000L, timeoutMs + 10000L));
-        } catch (InterruptedException ignored) {
-            Thread.currentThread().interrupt();
-        }
-        return out[0];
-    }
-
     private static String download(String urlStr, File dst, long timeoutMs) {
         HttpURLConnection c = null;
         try {
@@ -254,6 +250,20 @@ public final class PluginInstaller {
             return null;
         } finally {
             if (c != null) c.disconnect();
+        }
+    }
+
+    private static String sha256File(File f) {
+        try (InputStream in = new java.io.FileInputStream(f)) {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] buf = new byte[65536];
+            int n;
+            while ((n = in.read(buf)) > 0) md.update(buf, 0, n);
+            StringBuilder sb = new StringBuilder();
+            for (byte b : md.digest()) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Throwable t) {
+            return "";
         }
     }
 

@@ -253,6 +253,24 @@ AetherEngine (`com.aether.util.LogDump`):
 สัญญาปลั๊กอิน: `assets/aether-plugin.json {"entry":…}` (ไม่บังคับ) · entry = `static init(Context)` หรือ `Entry(Context)+bind(bridge)` · ไม่มี entry = module .so ล้วน
 รายละเอียด/ failure modes/ test plan: `docs/PLUGIN-LOADER.md`
 
+## 14. "ความฉลาด" ตามระบบ KOS (A14 — ยังไม่ประกอบ/ยังไม่ push รอ call)
+
+state machine + threading ที่เพิ่ม (เทียบพฤติกรรม KOS สด):
+```
+RunOffMain                          (ใหม่) — งานหนักไม่แตะ main เลยทุกจุด
+PluginInstaller.ensurePlugin        → state machine: verify sha256 ของ cache สดทุกครั้ง (KOS: loader_ identity)
+                                        reuse ผิด → ดาวน์โหลดใหม่อัตโนมัติ; ล้าง cache bin เก่าให้เหลือชุดเดียว
+PluginInstaller.materialize         → ล้าง plugin/legacy เก่าใน workspace ก่อนเขียน (เหลือ plugin_<epoch>.apk ตัวเดียว)
+                                        + lib/*.so + oat/arm64 + loader_<pkg> + aether_vm_config.properties
+PluginLoader.load                   → off-main (DexClassLoader → oat/arm64, System.load lib, entry/bridge)
+AetherCore.installFromDevice        → off-main (join 10 นาที) — copy 174MB จาก PackageManager sourceDir
+AetherCore.installFromUri (H/K)     → off-main (join 10 นาที)
+AetherCore.postInit (bootstrap)     → worker หลังหน้าจอพร้อม (ensure trees + seed icons)
+VStubActivity.onCreate              → worker "aether-vsstub-boot": install_device → launchInto → export → endSession;
+                                       UI อัปเดตผลผ่าน runOnUiThread ("preparing …")
+```
+สถานะข้อความ activity และ error ทั้งหมดคงปรัชญา `container:*` เดิม (ไม่เปิดแอปภายนอก)
+
 ## Level of parity
 
 | ชั้น | สถานะ | หมายเหตุ |

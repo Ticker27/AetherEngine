@@ -24,29 +24,34 @@ public class VStubActivity extends Activity {
             return;
         }
 
-        showMessage("container: launching " + target + " …  (จาก sandbox)");
-        // debug/test hook: --ez install_device true → ติดตั้งจาก device ก่อนเปิด
-        if (getIntent() != null && getIntent().getBooleanExtra("install_device", false)) {
-            String r = AetherCore.installFromDevice(this, target);
-            android.util.Log.i("AetherEngine", "VStub install_device → " + r);
-        }
+        showMessage("AetherEngine container\n\npreparing " + target + " …\n(คิว: install → plugin → boot)");
 
-        String status = GuestLauncher.launchInto(this, target);
-        android.util.Log.i("AetherEngine", "VStub(" + target + ") → " + status);
+        // KOS-parity: งานหนักทั้งหมดอยู่บน worker (ดาวน์โหลด/คัดลอก/extract/dex) — main คืนค่าทันที ไม่มี ANR
+        final String targetF = target;
+        new Thread(() -> {
+            if (getIntent() != null && getIntent().getBooleanExtra("install_device", false)) {
+                String r = AetherCore.installFromDevice(this, targetF);
+                android.util.Log.i("AetherEngine", "VStub install_device → " + r);
+            }
 
-        if (getIntent() != null && getIntent().getBooleanExtra("export_logs", false)) {
-            String r = com.aether.util.LogDump.export(this);
-            android.util.Log.i("AetherEngine", "VStub export_logs → " + r);
-        }
-        com.aether.util.LogDump.endSession(GuestLauncher.lastSession(), "final=" + status);
+            String status = GuestLauncher.launchInto(this, targetF);
+            android.util.Log.i("AetherEngine", "VStub(" + targetF + ") → " + status);
 
-        // launched/booted-no-ui = guest ยก UI เข้าจอเองแล้ว (ผ่าน host.setContentView ภายใน GuestLauncher)
-        if (!status.startsWith("container:launched") && !status.startsWith("container:booted-no-ui")) {
-            showMessage("AetherEngine container\n\n"
-                    + "target: " + target + "\n\n"
-                    + status + "\n\n"
-                    + "(ไม่เปิดแอปที่ติดตั้งภายนอก — รันจาก sandbox ของ container เท่านั้น)");
-        }
+            if (getIntent() != null && getIntent().getBooleanExtra("export_logs", false)) {
+                String r = com.aether.util.LogDump.export(this);
+                android.util.Log.i("AetherEngine", "VStub export_logs → " + r);
+            }
+            com.aether.util.LogDump.endSession(GuestLauncher.lastSession(), "final=" + status);
+
+            final String uiStatus = status;
+            runOnUiThread(() -> {
+                if (!uiStatus.startsWith("container:launched") && !uiStatus.startsWith("container:booted-no-ui")) {
+                    showMessage("AetherEngine container\n\n"
+                            + "target: " + targetF + "\n\n" + uiStatus + "\n\n"
+                            + "(ไม่เปิดแอปที่ติดตั้งภายนอก — รันจาก sandbox ของ container เท่านั้น)");
+                }
+            });
+        }, "aether-vsstub-boot").start();
     }
 
     private void showMessage(String text) {
