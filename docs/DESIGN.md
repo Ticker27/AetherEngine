@@ -240,6 +240,19 @@ AetherEngine (`com.aether.util.LogDump`):
 - rotate อัตโนมัติเก็บ 3 ไฟล์ล่าสุด · export = zip → `AetherFileProvider` → share chooser "Export Recent Logs"
 - code "P" + Settings row (l10n ×4) + debug hook `--ez export_logs true`
 
+## 13. Plugin + Loader (A13) — parity KOS, ออกแบบจากหลักฐานสด
+
+```
+กด Play → PluginInstaller.ensurePlugin
+   cache/<sha256>.bin (app cache)
+   → workspace/app_plugin_workspace_p0/plugin_<epoch>.apk + lib/*.so + oat/arm64/
+   → prefs loader_<pkg> = sha256  · cache/aether_vm_config.properties
+→ PluginLoader.load: DexClassLoader(apk, oat, lib) → System.load(*.so) → entry.init(Context)/bind(bridge)
+→ FakeCore→HookManager → GuestContext → Adoption → Application → providers → Activity
+```
+สัญญาปลั๊กอิน: `assets/aether-plugin.json {"entry":…}` (ไม่บังคับ) · entry = `static init(Context)` หรือ `Entry(Context)+bind(bridge)` · ไม่มี entry = module .so ล้วน
+รายละเอียด/ failure modes/ test plan: `docs/PLUGIN-LOADER.md`
+
 ## Level of parity
 
 | ชั้น | สถานะ | หมายเหตุ |

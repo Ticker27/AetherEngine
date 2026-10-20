@@ -151,8 +151,15 @@ public final class GuestLauncher {
             try {
                 String pl = PluginInstaller.ensurePlugin(host, pkg, 30000L);
                 android.util.Log.i(TAG, "plugin: " + pl);
+                com.aether.util.LogDump.stage(sLastSession, "[plugin] ensure → " + pl);
+
+                // โหลดปลั๊กอินเข้า process นี้ (apk + lib + oat) — ไม่ทำเกสต์ล้มถ้าไม่มี/โหลดไม่ได้
+                PluginLoader.Result lr = PluginLoader.load(host, pkg, guestLoader);
+                android.util.Log.i(TAG, "plugin loader: " + lr);
+                com.aether.util.LogDump.stage(sLastSession, "[plugin] loader → " + lr);
             } catch (Throwable t) {
                 android.util.Log.w(TAG, "plugin ensure: " + t);
+                com.aether.util.LogDump.stage(sLastSession, "[plugin] error " + t);
             }
 
             // 4pre) fake framework (parity KOS: FakeCore → HookManager)

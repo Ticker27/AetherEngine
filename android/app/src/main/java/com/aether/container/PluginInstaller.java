@@ -1,6 +1,7 @@
 package com.aether.container;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 
 import org.json.JSONObject;
 
@@ -10,43 +11,67 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.MessageDigest;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 /**
- * PluginInstaller — pipeline ปลั๊กอิน/โมดูล (parity KOS)
+ * PluginInstaller — pipeline ปลั๊กอิน (parity KOS 3.7 วัดสด 2026-10-20 21:21)
  *
- * หลักฐาน (2026-10-20):
- *   - กดเล่น → ดาวน์โหลด .bin เก็บใน /data/user/0/com.kos/cache/ (ชื่อตาม server id, เช่น ce1436bf…)
- *   - sha256 ของไฟล์ = acc706395e30… = ค่า loader_<pkg> ใน KOS_App_Settings.xml  (ตัวตน "loader")
- *   - VM config: pathToApk=cache/<id>  → กระจายเป็น apk เข้า guest data/app_plugin_workspace_p0
- * ที่นี่: cache/<sha256>.bin (self-record; KOS ใช้ server id — deviation ที่บันทึกไว้), verify sha ตัวเอง,
- * กระจายเป็น workspace/plugin.apk และบันทึกทุกอย่างลง package.conf (setting.plugin)
+ * ลำดับของ KOS ที่วัดได้:
+ *   1) cache/<id>  = /data/user/0/com.kos/cache/82f8ddb6…  (9,533,457 B)
+ *   2) sha256(ไฟล์)= 0553f818… = ค่า loader_<pkg> ใน KOS_App_Settings.xml
+ *   3) workspace   = …/app_plugin_workspace_p0/plugin_<epochMs>.apk (sha เดียวกัน)
+ *                    + lib/{libbytehook,libmkos,libshadowhook}.so
+ *                    + oat/plugin_<epochMs>.apk.cur.prof (+ oat/arm64/…)
+ *   4) vm config   = cache/blackbox_vm_config.properties → pathToApk=cache/<id>
+ *
+ * ที่นี่ทำแบบเดียวกัน แต่ตั้งชื่อ cache ด้วย sha256 ของเนื้อไฟล์ (self-verify ได้)
+ * และไม่แตะระบบ login key (ตัดตาม scope ของโปรเจกต์)
  */
 public final class PluginInstaller {
 
     private static final String TAG = "AetherEngine";
+    public static final String PREFS = "aether_plugin";
+    public static final String KEY_LOADER_PREFIX = "loader_";
+    public static final String VM_CONFIG = "aether_vm_config.properties";
 
     private PluginInstaller() {}
 
-    /** ทำให้ปลั๊กอินพร้อม: cache → verify → distribute. คืนสถานะสั้น ๆ */
-    public static String ensurePlugin(Context ctx, String pkg, long timeoutMs) {
+    /** cache ของแอป (parity: /data/user/0/<app>/cache/) */
+    public static File appCache(Context c) {
+        File d = c.getCacheDir();
+        if (!d.exists()) d.mkdirs();
+        return d;
+    }
+
+    /** workspace ของ guest ต่อ process (parity: app_plugin_workspace_p0) */
+    public static File workspace(Context c, String pkg) {
+        File d = new File(SandboxStore.guestUserDataDir(c, pkg), "app_plugin_workspace_p0");
+        if (!d.exists()) d.mkdirs();
+        return d;
+    }
+
+    /** ทำให้พร้อม: cache → verify → materialize workspace → prefs/vm config. คืนสถานะสั้น ๆ */
+    public static String ensurePlugin(Context c, String pkg, long timeoutMs) {
         TargetRegistry.Target t = TargetRegistry.byPkg(pkg);
         if (t == null || t.pluginUrl == null) return "n/a";
-        SandboxStore.ensureBaseLayout(ctx);
-        SandboxStore.ensureGuestLayout(ctx, pkg);
-        File cache = new File(SandboxStore.root(ctx), "cache");
-        if (!cache.exists()) cache.mkdirs();
+        SandboxStore.ensureBaseLayout(c);
+        SandboxStore.ensureGuestLayout(c, pkg);
 
-        JSONObject conf = SandboxStore.readPackageSetting(ctx, pkg);
+        JSONObject conf = SandboxStore.readPackageSetting(c, pkg);
         JSONObject pl = conf == null ? null : conf.optJSONObject("plugin");
         String recSha = pl == null ? null : pl.optString("sha256", null);
+        File cache = appCache(c);
+
         if (recSha != null && recSha.length() == 64) {
             File cached = new File(cache, recSha + ".bin");
             if (cached.exists() && cached.length() > 0) {
-                return "ready:" + recSha.substring(0, 12) + " (" + distribute(ctx, pkg, cached, conf) + ")";
+                return "ready:" + recSha.substring(0, 12)
+                        + " (" + materialize(c, pkg, cached, recSha, conf) + ")";
             }
         }
 
-        File tmp = new File(cache, "plugin.download.tmp");
+        File tmp = new File(cache, "aether_plugin.tmp");
         String sha = download(t.pluginUrl, tmp, timeoutMs);
         if (sha == null) return "download-failed";
 
@@ -54,52 +79,110 @@ public final class PluginInstaller {
         if (!tmp.renameTo(dst)) {
             try {
                 copyFile(tmp, dst);
+                //noinspection ResultOfMethodCallIgnored
                 tmp.delete();
             } catch (Exception e) {
                 android.util.Log.w(TAG, "plugin cache: " + e);
                 return "cache-write-failed";
             }
         }
-        JSONObject setting = conf != null ? conf : new JSONObject();
-        try {
-            JSONObject p = new JSONObject();
-            p.put("url", t.pluginUrl);
-            p.put("path", dst.getAbsolutePath());
-            p.put("sha256", sha);
-            p.put("size", dst.length());
-            p.put("downloadedAt", System.currentTimeMillis());
-            p.put("id", urlId(t.pluginUrl));
-            setting.put("plugin", p);
-            SandboxStore.writePackageSetting(ctx, pkg, setting);
-        } catch (Exception e) {
-            android.util.Log.w(TAG, "plugin conf: " + e);
-        }
-        return "downloaded:" + sha.substring(0, 12) + " (" + distribute(ctx, pkg, dst, setting) + ")";
+        return "downloaded:" + sha.substring(0, 12) + " (" + materialize(c, pkg, dst, sha, conf) + ")";
     }
 
-    /** กระจายไฟล์เป็น APK เข้า guest app_plugin_workspace_p0 (parity kos_engine/data/user/0/<pkg>/…) */
-    private static String distribute(Context ctx, String pkg, File bin, JSONObject conf) {
+    /** กระจายเข้า workspace (apk + lib + oat) + บันทึก prefs loader_ + vm config */
+    private static String materialize(Context c, String pkg, File bin, String sha, JSONObject conf) {
         try {
-            File ws = new File(SandboxStore.guestUserDataDir(ctx, pkg), "app_plugin_workspace_p0");
-            if (!ws.exists()) ws.mkdirs();
-            File out = new File(ws, "plugin.apk");
-            copyFile(bin, out);
+            File ws = workspace(c, pkg);
+            File libDir = new File(ws, "lib");
+            File oatDir = new File(new File(ws, "oat"), "arm64");
+            if (!libDir.exists()) libDir.mkdirs();
+            if (!oatDir.exists()) oatDir.mkdirs();
+
+            File apk = new File(ws, "plugin_" + System.currentTimeMillis() + ".apk");
+            copyFile(bin, apk);
+            VPackageInstaller.markReadOnly(apk);   // Android 14+: dex ที่เขียนได้โหลดไม่ได้
+
+            int libs = extractLibs(apk, libDir);
+
             JSONObject setting = conf != null ? conf : new JSONObject();
             JSONObject p = setting.optJSONObject("plugin");
             if (p == null) p = new JSONObject();
-            JSONObject dist = new JSONObject();
-            dist.put("file", out.getAbsolutePath());
-            dist.put("size", out.length());
-            dist.put("at", System.currentTimeMillis());
-            p.put("workspace", dist);
+            p.put("url", TargetRegistry.byPkg(pkg) != null ? TargetRegistry.byPkg(pkg).pluginUrl : "");
+            p.put("cachePath", bin.getAbsolutePath());
+            p.put("sha256", sha);
+            p.put("size", bin.length());
+            p.put("apk", apk.getAbsolutePath());
+            p.put("libs", libs);
+            p.put("preparedAt", System.currentTimeMillis());
+            JSONObject wsj = new JSONObject();
+            wsj.put("apk", apk.getName());
+            wsj.put("libDir", libDir.getAbsolutePath());
+            wsj.put("oatDir", oatDir.getAbsolutePath());
+            wsj.put("at", System.currentTimeMillis());
+            p.put("workspace", wsj);
             setting.put("plugin", p);
-            SandboxStore.writePackageSetting(ctx, pkg, setting);
-            android.util.Log.i(TAG, "plugin distributed → " + out + " (" + out.length() + " B)");
-            return "workspace-ok";
+            SandboxStore.writePackageSetting(c, pkg, setting);
+
+            // prefs: loader_<pkg> = sha256 (parity KOS_App_Settings)
+            SharedPreferences sp = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            sp.edit().putString(KEY_LOADER_PREFIX + pkg, sha).apply();
+
+            // vm config (parity blackbox_vm_config.properties)
+            writeVmConfig(c, pkg, bin.getAbsolutePath(), sha);
+
+            android.util.Log.i(TAG, "plugin materialized: apk=" + apk.getName()
+                    + " libs=" + libs + " sha=" + sha.substring(0, 12) + "…");
+            com.aether.util.LogDump.engine(c, "plugin: apk=" + apk.getName()
+                    + " libs=" + libs + " sha=" + sha);
+            return "workspace-ok:" + libs + "lib";
         } catch (Throwable t) {
-            android.util.Log.w(TAG, "plugin distribute: " + t);
+            android.util.Log.w(TAG, "plugin materialize: " + t);
             return "workspace-fail";
         }
+    }
+
+    private static void writeVmConfig(Context c, String pkg, String apkPath, String sha) {
+        try {
+            String gid = c.getSharedPreferences("aether", Context.MODE_PRIVATE)
+                    .getString("gid", null);
+            StringBuilder sb = new StringBuilder();
+            sb.append("# ").append(new java.util.Date()).append('\n');
+            sb.append("enable_plugin=true\n");
+            sb.append("plugin_target_package=").append(pkg).append('\n');
+            sb.append("pathToApk=").append(apkPath).append('\n');
+            sb.append("loader_sha256=").append(sha).append('\n');
+            if (gid != null) sb.append("g_id=").append(gid).append('\n');
+            File f = new File(appCache(c), VM_CONFIG);
+            try (FileOutputStream o = new FileOutputStream(f)) {
+                o.write(sb.toString().getBytes("UTF-8"));
+            }
+        } catch (Throwable t) {
+            android.util.Log.w(TAG, "vm config: " + t);
+        }
+    }
+
+    /** แตก lib/<abi>/*.so ของปลั๊กอินเข้า workspace/lib (parity: KOS แตก libbytehook/mkos/shadowhook) */
+    private static int extractLibs(File apk, File libDir) {
+        int n = 0;
+        try (ZipFile zf = new ZipFile(apk)) {
+            java.util.Enumeration<? extends ZipEntry> en = zf.entries();
+            while (en.hasMoreElements()) {
+                ZipEntry e = en.nextElement();
+                String name = e.getName();
+                if (!name.startsWith("lib/arm64-v8a/") || !name.endsWith(".so")) continue;
+                File out = new File(libDir, name.substring(name.lastIndexOf('/') + 1));
+                try (InputStream in = zf.getInputStream(e);
+                     FileOutputStream os = new FileOutputStream(out)) {
+                    byte[] buf = new byte[65536];
+                    int r;
+                    while ((r = in.read(buf)) > 0) os.write(buf, 0, r);
+                }
+                n++;
+            }
+        } catch (Throwable t) {
+            android.util.Log.w(TAG, "plugin extractLibs: " + t);
+        }
+        return n;
     }
 
     private static String download(String urlStr, File dst, long timeoutMs) {
@@ -149,11 +232,5 @@ public final class PluginInstaller {
             int n;
             while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
         }
-    }
-
-    private static String urlId(String url) {
-        int i = url.lastIndexOf('/');
-        int j = url.lastIndexOf('.');
-        return (i >= 0 && j > i) ? url.substring(i + 1, j) : "plugin";
     }
 }

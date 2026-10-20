@@ -68,6 +68,7 @@ AetherEngine/
 - **A2a** ✅ proxy `:p0–:p3` ครบ + VPN + permission battery + CI manifest gate
 - **A2b** ✅ browser ในแอป + zip share/provider + image picker/compress (codes I/J/K)
 - **A3** ✅ native เต็มชุด 10 methods + blob table ×4 + DeviceRegistry + gate native
+- **A13** ✅ plugin + loader system (KOS parity): cache/<sha>.bin → workspace plugin_<epoch>.apk + lib + oat → prefs loader_<pkg> → vm config · PluginLoader (DexClassLoader + System.load + entry/bridge) เรียกก่อน boot guest · docs/PLUGIN-LOADER.md
 - **A12** ✅ log/dump ในตัว parity KOS: `[AE-DIRECT]` lines · session ต่อเกสต์ `<pkg>-ts-0.txt` · com.aether.txt · rotate 3 · export zip+share (code P + Settings + debug hook)
 - **A11** ✅ plugin/module pipeline: download .bin→cache/<sha>.bin→verify→distribute app_plugin_workspace_p0→conf (code "O" + auto on launch; sha=loader identity per KOS evidence)
 - **A10** ✅ version subsystem: VersionUtil + pin/allowedVersions/policy ต่อเกม (8BP pin 56.31.0 listed {31.0,31.1,32.0}) — ใช้ใน install/conf/launch-gate/snapshot/UI
