@@ -34,6 +34,12 @@ public class VStubActivity extends Activity {
         String status = GuestLauncher.launchInto(this, target);
         android.util.Log.i("AetherEngine", "VStub(" + target + ") → " + status);
 
+        if (getIntent() != null && getIntent().getBooleanExtra("export_logs", false)) {
+            String r = com.aether.util.LogDump.export(this);
+            android.util.Log.i("AetherEngine", "VStub export_logs → " + r);
+        }
+        com.aether.util.LogDump.endSession(GuestLauncher.lastSession(), "final=" + status);
+
         // launched/booted-no-ui = guest ยก UI เข้าจอเองแล้ว (ผ่าน host.setContentView ภายใน GuestLauncher)
         if (!status.startsWith("container:launched") && !status.startsWith("container:booted-no-ui")) {
             showMessage("AetherEngine container\n\n"

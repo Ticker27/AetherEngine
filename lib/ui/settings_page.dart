@@ -50,6 +50,16 @@ class _SettingsPageState extends State<SettingsPage> {
               )),
           const Divider(),
           ListTile(
+            leading: const Icon(Icons.article_outlined),
+            title: Text(l.get('exportLogs')),
+            subtitle: Text(l.get('exportLogsSub')),
+            onTap: () async {
+              final String? r = await EngineChannel.exportLogs();
+              if (mounted) setState(() => _device = 'log export → ${r ?? ''}');
+            },
+          ),
+          const Divider(),
+          ListTile(
             leading: const Icon(Icons.phone_android),
             title: Text(l.get('device')),
             subtitle: Text(_device, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),

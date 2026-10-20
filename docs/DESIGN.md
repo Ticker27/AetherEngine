@@ -223,6 +223,23 @@ AetherEngine (`com.aether.container.PluginInstaller`):
 - บันทึก `setting.plugin = {url, path, sha256, size, downloadedAt, id, workspace{file,size,at}}`
 - snapshot/UI: pluginReady/pluginSha + ปุ่ม "Plugin"
 
+## 12. Log/dump ในตัว + LOG VIEW export (parity KOS — A12)
+
+ดัมป์จริงของ KOS (ตรวจเมื่อ 2026-10-20, แนบจากเครื่อง):
+```
+<epoch_ms> [KOS-DIRECT] process=<proc> pid=<pid> <ข้อความ>
+com.kos.txt                                   host reader  (virtual=host)
+<pkg>-YYYY-MM-DD_HH-mm-ss-SSS-0.txt           guest session (virtual=<pkg>/0, :p0 "game reader")
+  เปิด:  "[LOGGER] capture started; file=… virtual=…; raw logcat is best-effort; …"
+  ปิด:   "game process ended; draining final logcat records"
+เก็บล่าสุด 3 game logs + com.kos.txt · Settings → LOG VIEW → Export Recent Logs (share)
+```
+AetherEngine (`com.aether.util.LogDump`):
+- รูปแบบบรรทัด `<ms> [AE-DIRECT] process=<Application.getProcessName()> pid=<pid> …`
+- `logs/com.aether.txt` (host) + `logs/<pkg>-<ts>-0.txt` ต่อ session (เปิดโดย GuestLauncher step แรก, ปิดใน VStubActivity พร้อม final status)
+- rotate อัตโนมัติเก็บ 3 ไฟล์ล่าสุด · export = zip → `AetherFileProvider` → share chooser "Export Recent Logs"
+- code "P" + Settings row (l10n ×4) + debug hook `--ez export_logs true`
+
 ## Level of parity
 
 | ชั้น | สถานะ | หมายเหตุ |

@@ -38,5 +38,6 @@ public class App extends android.app.Application {
         super.onCreate();
         AetherCore.postInit(this);      // parity: core post-init
         Log.i("AetherEngine", "App.onCreate: engine=" + AetherCore.engineVersion());
+        com.aether.util.LogDump.engine(this, "App.onCreate engine=" + AetherCore.engineVersion());
     }
 }

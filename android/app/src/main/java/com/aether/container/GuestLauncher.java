@@ -72,6 +72,11 @@ public final class GuestLauncher {
     }
 
     private static boolean sBypassTried = false;
+    private static java.io.File sLastSession;
+
+    public static java.io.File lastSession() {
+        return sLastSession;
+    }
 
     /** เปิด hiddenapi exemptions เพื่อให้ reflection แตะ method ของ framework ได้
      *  (double-reflection ผ่าน VMRuntime.setHiddenApiExemptions — เทคนิคที่ framework plugin ใช้กันทั่วไป)
@@ -104,6 +109,9 @@ public final class GuestLauncher {
 
         File apk = SandboxStore.guestApk(host, pkg);
         if (!apk.exists()) return "container:not-installed(sandbox apk missing)";
+        sLastSession = com.aether.util.LogDump.startSession(host, pkg);
+        com.aether.util.LogDump.stage(sLastSession,
+                "[session] launch " + pkg + " apk=" + apk.length() + "B");
         if (apk.canWrite()) VPackageInstaller.markReadOnly(apk);   // กัน SecurityException บน Android ≥14
 
         try {
@@ -122,6 +130,7 @@ public final class GuestLauncher {
             // 3) แตก native libs ของ guest + PathClassLoader (apk + libDir ของ guest)
             File libDir = SandboxStore.guestLibDir(host, pkg);
             prepareGuestNatives(apk, libDir);   // สแกนทุก apk ใน guestDir (base+split)
+            com.aether.util.LogDump.stage(sLastSession, "[session] natives prepared lib=" + libDir);
             // รวม base.apk + split APKs ทั้งหมดใน guestDir (source = device install)
             StringBuilder cp = new StringBuilder(apk.getAbsolutePath());
             File[] guestApks = SandboxStore.guestDir(host, pkg).listFiles(
@@ -136,6 +145,7 @@ public final class GuestLauncher {
                     cp.toString(), libDir.getAbsolutePath(), GuestLauncher.class.getClassLoader());
             android.util.Log.i(TAG, "guest: PathClassLoader apk=" + apk.getAbsolutePath()
                     + " lib=" + libDir.getAbsolutePath());
+            com.aether.util.LogDump.stage(sLastSession, "[session] classloader ready (base+splits)");
 
             // 3.9) plugin/module pipeline (parity KOS: กดเล่น → ดาวน์โหลด .bin → cache → กระจาย apk เข้า workspace)
             try {
@@ -149,6 +159,7 @@ public final class GuestLauncher {
             //       instrumentation + IAMS proxy + IPMS proxy + HCallback — เฉพาะ process นี้ (:p0)
             try {
                 com.aether.fake.hook.HookManager.install(host, pkg, guestLoader);
+                com.aether.util.LogDump.stage(sLastSession, "[session] fake framework installed");
             } catch (Throwable t) {
                 android.util.Log.w(TAG, "fake framework install: " + t);
             }
@@ -215,7 +226,9 @@ public final class GuestLauncher {
             android.content.Context guestCtx = new GuestContext(host, pkg, guestAi, guestLoader, guestRes,
                     SandboxStore.guestUserDataDir(host, pkg));
             android.app.Application guestApp = attachGuestApplication(gm, guestLoader, guestCtx);
+            com.aether.util.LogDump.stage(sLastSession, "[session] application attached");
             bootGuestProviders(gm, guestLoader, guestCtx, guestAi, pkg);
+            com.aether.util.LogDump.stage(sLastSession, "[session] providers done");
             finishGuestApplication(gm, guestCtx, guestApp);
             loadModuleIfPresent(guestLoader, libDir);
 

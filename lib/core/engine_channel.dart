@@ -43,6 +43,7 @@ class EngineChannel {
   static Future<String?> deviceInfo() => dispatch('L');
   static Future<String?> installFromDevice(String pkg) => dispatch('N', pkg);
   static Future<String?> fetchPlugin(String pkg) => dispatch('O', pkg);
+  static Future<String?> exportLogs() => dispatch('P');
   static Future<String?> launchContainer(String pkg) => dispatch('M', pkg);
 
   /// รับผลจากฝั่ง host (เช่น ผลย่อรูปจาก code "I")

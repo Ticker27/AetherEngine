@@ -74,6 +74,7 @@ public final class AetherCore {
                 }
             }
             android.util.Log.i("AetherEngine", "sandbox: base layout ready, guests=" + n);
+            com.aether.util.LogDump.engine(ctx, "postInit sandbox ready guests=" + n);
         } catch (Throwable t) {
             android.util.Log.w("AetherEngine", "sandbox ensure: " + t);
         }

@@ -31,6 +31,7 @@ import com.aether.helper.Native;
  *   "M"  → launch guest ใน container จาก sandbox เท่านั้น (ห้ามเปิดแอปนอก)
  *   "N"  → install จากแอปที่ติดตั้งบนเครื่อง (sourceDir + splits) — ไม่ใช้ไฟล์ภายนอก
  *   "O"  → plugin/module pipeline: download .bin → root/cache/<sha>.bin → app_plugin_workspace_p0
+ *   "P"  → export recent logs (zip → share) — parity KOS LOG VIEW
  *
  * ตัดออก: code ที่ผูกกับระบบ login key/license ไม่มีในตาราง ไม่มี backend call ใด ๆ
  */
@@ -100,6 +101,8 @@ public final class CommandRouter {
                 }
                 return "apk-picker";
             }
+            case "P":                                     // export log ล่าสุด (3 game logs + engine) เป็น zip → share
+                return com.aether.util.LogDump.export(ctx);
             case "O":                                     // ดาวน์โหลด plugin/module (.bin) → cache → กระจายเข้า workspace
                 return com.aether.container.PluginInstaller.ensurePlugin(ctx, String.valueOf(arg), 60000L);
             case "N":                                     // ติดตั้งจากแอปที่ติดตั้งบนเครื่อง (PackageManager source)
