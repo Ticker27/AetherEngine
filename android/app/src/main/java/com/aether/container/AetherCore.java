@@ -12,6 +12,7 @@ import android.os.IBinder;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -137,6 +138,97 @@ public final class AetherCore {
         it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         ctx.startActivity(it);
         return "launched-in-container:" + (t != null ? t.name : targetPkg) + "@" + ver;
+    }
+
+    /**
+     * ติดตั้งเข้า sandbox จาก "แอปที่ติดตั้งอยู่บนเครื่อง" (source of truth = PackageManager)
+     * หลักฐาน: ai.sourceDir + pi.splitSourceDirs/splitNames — ไม่ดึงจากไฟล์ภายนอก
+     */
+    public static String installFromDevice(Context ctx, String pkg) {
+        try {
+            PackageManager pm = ctx.getPackageManager();
+            PackageInfo pi = pm.getPackageInfo(pkg, 0);
+            if (pi == null || pi.applicationInfo == null) return "device:no-app-info";
+
+            String srcBase = pi.applicationInfo.sourceDir;
+            if (srcBase == null || !new java.io.File(srcBase).exists()) return "device:source-missing";
+
+            SandboxStore.ensureBaseLayout(ctx);
+            SandboxStore.ensureGuestLayout(ctx, pkg);
+
+            File dstBase = SandboxStore.guestApk(ctx, pkg);
+            copyFile(new java.io.File(srcBase), dstBase);
+            VPackageInstaller.markReadOnly(dstBase);
+
+            JSONArray splitArr = new JSONArray();
+            String[] splitDirs = pi.applicationInfo.splitSourceDirs;
+            String[] splitNames = pi.splitNames;
+            if (splitDirs != null && splitDirs.length > 0) {
+                for (int i = 0; i < splitDirs.length; i++) {
+                    String sp = splitDirs[i];
+                    if (sp == null || !new java.io.File(sp).exists()) continue;
+                    String nm = (splitNames != null && i < splitNames.length && splitNames[i] != null)
+                            ? splitNames[i] : ("split_" + i);
+                    File dst = new File(SandboxStore.guestDir(ctx, pkg), nm + ".apk");
+                    copyFile(new java.io.File(sp), dst);
+                    VPackageInstaller.markReadOnly(dst);
+                    JSONObject o = new JSONObject();
+                    o.put("name", nm);
+                    o.put("file", dst.getName());
+                    o.put("sha256", VPackageInstaller.sha256(dst));
+                    splitArr.put(o);
+                }
+            }
+
+            String ver = pi.versionName == null ? "?" : pi.versionName;
+            long vc = pi.getLongVersionCode();
+            String sha = VPackageInstaller.sha256(dstBase);
+
+            TargetRegistry.Target t = TargetRegistry.byPkg(pkg);
+            String pin = "n/a";
+            if (t != null) pin = ver.equals(t.pinVersion) ? "match" : ("mismatch(want=" + t.pinVersion + ")");
+
+            JSONObject setting = new JSONObject();
+            setting.put("apkPath", dstBase.getAbsolutePath());
+            setting.put("versionName", ver);
+            setting.put("versionCode", vc);
+            setting.put("sha256", sha);
+            setting.put("installedAt", System.currentTimeMillis());
+            setting.put("source", "device:" + pkg);
+            setting.put("pin", pin);
+            setting.put("splits", splitArr);
+            JSONObject states = new JSONObject();
+            states.put("installed", true);
+            states.put("stopped", false);
+            states.put("hidden", false);
+            states.put("launched", false);
+            setting.put("states", states);
+            SandboxStore.writePackageSetting(ctx, pkg, setting);
+            SandboxStore.allocUid(ctx, pkg);
+
+            android.util.Log.i("AetherEngine", "install-from-device: " + pkg + "@" + ver
+                    + " splits=" + splitArr.length() + " pin=" + pin
+                    + " sha256=" + sha.substring(0, 12) + "…");
+            return "installed-from-device:" + pkg + "@" + ver + " pin=" + pin;
+        } catch (Throwable t) {
+            android.util.Log.w("AetherEngine", "install-from-device failed", t);
+            return "ERR:" + describeErr(t);
+        }
+    }
+
+    private static String describeErr(Throwable t) {
+        return t.getClass().getSimpleName() + ": " + t.getMessage();
+    }
+
+    private static void copyFile(java.io.File src, java.io.File dst) throws Exception {
+        java.io.File d = dst.getParentFile();
+        if (d != null && !d.exists()) d.mkdirs();
+        try (java.io.InputStream in = new java.io.FileInputStream(src);
+             java.io.OutputStream out = new java.io.FileOutputStream(dst)) {
+            byte[] buf = new byte[65536];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+        }
     }
 
     /** migration: APK ที่เคยคัดลอกไว้ที่ filesDir/containers (โฟลว์เดิม) → adopt เข้า sandbox root */

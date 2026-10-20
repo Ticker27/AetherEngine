@@ -16,6 +16,7 @@ import 'package:flutter/services.dart';
 ///   "K" → apk picker
 ///   "L" → device info
 ///   "M" → launch container app (pkg)
+///   "N" → install จากแอปที่ติดตั้งบนเครื่อง
 /// ทุกอย่างวิ่งผ่าน CommandRouter ฝั่ง Java → (เมื่อถึงคิว) → libaether.so
 class EngineChannel {
   EngineChannel._();
@@ -40,6 +41,7 @@ class EngineChannel {
   static Future<String?> zipShare([String? path]) => dispatch('J', path);
   static Future<String?> pickApk() => dispatch('K');
   static Future<String?> deviceInfo() => dispatch('L');
+  static Future<String?> installFromDevice(String pkg) => dispatch('N', pkg);
   static Future<String?> launchContainer(String pkg) => dispatch('M', pkg);
 
   /// รับผลจากฝั่ง host (เช่น ผลย่อรูปจาก code "I")

@@ -25,6 +25,12 @@ public class VStubActivity extends Activity {
         }
 
         showMessage("container: launching " + target + " …  (จาก sandbox)");
+        // debug/test hook: --ez install_device true → ติดตั้งจาก device ก่อนเปิด
+        if (getIntent() != null && getIntent().getBooleanExtra("install_device", false)) {
+            String r = AetherCore.installFromDevice(this, target);
+            android.util.Log.i("AetherEngine", "VStub install_device → " + r);
+        }
+
         String status = GuestLauncher.launchInto(this, target);
         android.util.Log.i("AetherEngine", "VStub(" + target + ") → " + status);
 

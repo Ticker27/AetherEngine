@@ -119,6 +119,11 @@ class _HomePageState extends State<HomePage> {
                           onPressed: () => _run('"K" pick apk', () => EngineChannel.pickApk()),
                           child: Text(l.get('installApk')),
                         ),
+                        TextButton(
+                          onPressed: () => _run('"N" install from device ${t['pkg']}',
+                              () => EngineChannel.installFromDevice('${t['pkg']}')).then((_) => _refresh()),
+                          child: Text(l.get('installDevice')),
+                        ),
                         FilledButton.tonal(
                           onPressed: () => _run('"M" launch ${t['pkg']}',
                               () => EngineChannel.launchContainer('${t['pkg']}')).then((_) => _refresh()),

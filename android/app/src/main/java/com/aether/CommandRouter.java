@@ -29,6 +29,7 @@ import com.aether.helper.Native;
  *   "K"  → APK picker → install เข้า container
  *   "L"  → device fingerprint (reflection, อ่านอย่างเดียว)
  *   "M"  → launch guest ใน container จาก sandbox เท่านั้น (ห้ามเปิดแอปนอก)
+ *   "N"  → install จากแอปที่ติดตั้งบนเครื่อง (sourceDir + splits) — ไม่ใช้ไฟล์ภายนอก
  *
  * ตัดออก: code ที่ผูกกับระบบ login key/license ไม่มีในตาราง ไม่มี backend call ใด ๆ
  */
@@ -98,6 +99,8 @@ public final class CommandRouter {
                 }
                 return "apk-picker";
             }
+            case "N":                                     // ติดตั้งจากแอปที่ติดตั้งบนเครื่อง (PackageManager source)
+                return AetherCore.installFromDevice(ctx, String.valueOf(arg));
             case "L":                                     // device fingerprint (reflection — อ่านอย่างเดียว)
                 return com.aether.util.DeviceRegistry.summary(ctx);
             case "M":                                     // launch guest ใน container จาก sandbox (ไม่เปิดแอปนอก)

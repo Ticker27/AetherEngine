@@ -68,6 +68,7 @@ AetherEngine/
 - **A2a** ✅ proxy `:p0–:p3` ครบ + VPN + permission battery + CI manifest gate
 - **A2b** ✅ browser ในแอป + zip share/provider + image picker/compress (codes I/J/K)
 - **A3** ✅ native เต็มชุด 10 methods + blob table ×4 + DeviceRegistry + gate native
+- **A9** ✅ install source = แอปที่ติดตั้งบนเครื่อง (sourceDir+splits) — code "N" + ปุ่ม UI + multi-apk loader/natives (ไม่ใช้ไฟล์ /sdcard อีก)
 - **A8** ✅ sandbox layout parity ตาม kos_engine: cache stubs · app-staging · profiles/{cur,ref} · xposed/developer-module.conf · guest data subdirs ครบ (ensureBase/ensureGuest จาก postInit)
 - **A7** ✅ fake framework (port โครง KOS): FakeCore · HookManager · AppInstrumentation · IActivityManagerProxy · IPackageManagerProxy (forge จาก sandbox) — ติดตั้งเฉพาะ :p0
 - **A6** ✅ data layer ตามดัมป์จริง: sandbox layout (root/system confs · data/app/<pkg>/{base.apk,package.conf,lib} · user[_de] · fake proc) · ContentCache files/<sha256> · ไอคอน/assets ของเราเอง

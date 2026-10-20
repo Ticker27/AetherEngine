@@ -47,7 +47,13 @@ public final class GuestLauncher {
             File[] have = libDir.listFiles((d, f) -> f.endsWith(".so"));
             if (have != null && have.length > 0) return;   // ทำครั้งเดียว (นับเฉพาะ .so)
             int n = 0, failed = 0; long total = 0;
-            try (java.util.zip.ZipFile zf = new java.util.zip.ZipFile(apk)) {
+            File[] allApks = apk.getParentFile() != null
+                    ? apk.getParentFile().listFiles((d, f) -> f.endsWith(".apk")) : null;
+            java.util.List<File> apkList = new java.util.ArrayList<>();
+            if (allApks != null) java.util.Collections.addAll(apkList, allApks);
+            if (apkList.isEmpty()) apkList.add(apk);
+            for (File oneApk : apkList)
+            try (java.util.zip.ZipFile zf = new java.util.zip.ZipFile(oneApk)) {
                 java.util.Enumeration<? extends java.util.zip.ZipEntry> en = zf.entries();
                 while (en.hasMoreElements()) {
                     java.util.zip.ZipEntry e = en.nextElement();
@@ -115,9 +121,19 @@ public final class GuestLauncher {
 
             // 3) แตก native libs ของ guest + PathClassLoader (apk + libDir ของ guest)
             File libDir = SandboxStore.guestLibDir(host, pkg);
-            prepareGuestNatives(apk, libDir);
+            prepareGuestNatives(apk, libDir);   // สแกนทุก apk ใน guestDir (base+split)
+            // รวม base.apk + split APKs ทั้งหมดใน guestDir (source = device install)
+            StringBuilder cp = new StringBuilder(apk.getAbsolutePath());
+            File[] guestApks = SandboxStore.guestDir(host, pkg).listFiles(
+                    (dir, name) -> name.endsWith(".apk"));
+            if (guestApks != null) {
+                for (File f : guestApks) {
+                    if (f.getAbsolutePath().equals(apk.getAbsolutePath())) continue;
+                    cp.append(':').append(f.getAbsolutePath());
+                }
+            }
             ClassLoader guestLoader = new dalvik.system.PathClassLoader(
-                    apk.getAbsolutePath(), libDir.getAbsolutePath(), GuestLauncher.class.getClassLoader());
+                    cp.toString(), libDir.getAbsolutePath(), GuestLauncher.class.getClassLoader());
             android.util.Log.i(TAG, "guest: PathClassLoader apk=" + apk.getAbsolutePath()
                     + " lib=" + libDir.getAbsolutePath());
 

@@ -179,6 +179,19 @@ kos_engine/                        ← ต้นแบบ (live, 8BP รัน�
 จุดต่างโดยเจตนา: conf ของเราเป็น JSON (อ่าน/ทดสอบง่าย) — ต้นแบบเป็น binary serialization ของ BPackage;
 `oat/arm64/base.odex` เกิดจาก ART ตอนโหลดจริง (ทั้งคู่มี)
 
+## 9. Install source = device install (A9)
+
+เปลี่ยนแหล่งที่มา: guest APK อ่านจาก **PackageManager ของแอปที่ติดตั้งบนเครื่อง**
+(`ApplicationInfo.sourceDir` + `splitSourceDirs`) — ไม่ดึงจากไฟล์ใน /sdcard หรือ SAF
+```
+code "N" → AetherCore.installFromDevice(pkg)
+  → copy base.apk (+split_<name>.apk ทั้งหมด) → root/data/app/<pkg>/
+  → sha256 + versionName/Code จริงจาก PackageInfo → package.conf (source="device:<pkg>")
+  → markReadOnly → PathClassLoader ใช้ base+split ทั้งชุด, natives แตกจากทุก apk
+UI: การ์ดเกมมีปุ่ม "Install from device" (l10n 4 ภาษา) · debug hook: --ez install_device true
+```
+ปิดช่องเดิม: fixture ทดสอบไม่ใช้ไฟล์ /sdcard/Download อีก — ใช้ของที่ติดตั้งจริงบนเครื่องเท่านั้น
+
 ## Level of parity
 
 | ชั้น | สถานะ | หมายเหตุ |
