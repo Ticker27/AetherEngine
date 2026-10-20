@@ -137,6 +137,14 @@ public final class GuestLauncher {
             android.util.Log.i(TAG, "guest: PathClassLoader apk=" + apk.getAbsolutePath()
                     + " lib=" + libDir.getAbsolutePath());
 
+            // 3.9) plugin/module pipeline (parity KOS: กดเล่น → ดาวน์โหลด .bin → cache → กระจาย apk เข้า workspace)
+            try {
+                String pl = PluginInstaller.ensurePlugin(host, pkg, 30000L);
+                android.util.Log.i(TAG, "plugin: " + pl);
+            } catch (Throwable t) {
+                android.util.Log.w(TAG, "plugin ensure: " + t);
+            }
+
             // 4pre) fake framework (parity KOS: FakeCore → HookManager)
             //       instrumentation + IAMS proxy + IPMS proxy + HCallback — เฉพาะ process นี้ (:p0)
             try {

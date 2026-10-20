@@ -136,6 +136,18 @@ public final class AetherCore {
         }
 
         SandboxStore.markLaunched(ctx, targetPkg, System.currentTimeMillis());
+
+        // KOS parity: กดเล่น → ดาวน์โหลด plugin ล่วงหน้า (background, ไม่บล็อก UI)
+        final Context appCtx = ctx.getApplicationContext();
+        final String tp = targetPkg;
+        new Thread(() -> {
+            try {
+                String r = PluginInstaller.ensurePlugin(appCtx, tp, 45000L);
+                android.util.Log.i("AetherEngine", "plugin(async): " + r);
+            } catch (Throwable te) {
+                android.util.Log.w("AetherEngine", "plugin(async): " + te);
+            }
+        }, "aether-plugin").start();
         SandboxStore.writeProcCmdline(ctx, targetPkg);   // fake /proc/0/cmdline (parity จากดัมป์จริง)
         Intent it = new Intent(ctx, VStubActivity.class);
         it.putExtra("target", targetPkg);
@@ -297,6 +309,9 @@ public final class AetherCore {
                 String dv = installedVersion(ctx, t.pkg);
                 o.put("deviceVersion", dv == null ? JSONObject.NULL : dv);
                 o.put("policy", t.versionPolicy);
+                JSONObject pj = conf != null ? conf.optJSONObject("plugin") : null;
+                o.put("pluginReady", pj != null && pj.optString("sha256", "").length() > 0);
+                o.put("pluginSha", pj != null ? pj.optString("sha256", "") : "");
                 o.put("allowed", new org.json.JSONArray(java.util.Arrays.asList(t.allowedVersions)));
                 String status;
                 if (ver == null) status = "not-installed";

@@ -122,6 +122,11 @@ class _HomePageState extends State<HomePage> {
                           child: Text(l.get('installApk')),
                         ),
                         TextButton(
+                          onPressed: () => _run('"O" plugin ${t['pkg']}',
+                              () => EngineChannel.fetchPlugin('${t['pkg']}')).then((_) => _refresh()),
+                          child: Text(l.get('downloadPlugin')),
+                        ),
+                        TextButton(
                           onPressed: () => _run('"N" install from device ${t['pkg']}',
                               () => EngineChannel.installFromDevice('${t['pkg']}')).then((_) => _refresh()),
                           child: Text(l.get('installDevice')),

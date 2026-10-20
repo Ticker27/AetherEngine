@@ -206,6 +206,23 @@ VersionUtil.evaluate(version, pin, allowed, policy) → Result{state: match|allo
 ผลผูกเข้า 3 จุด: install (pin=Result), package.conf (pin), launch gate (block เฉพาะ state=mismatch),
 targetsSnapshot (status/statusReason/policy/allowed → UI chip เขียว=match · น้ำเงิน=allowed · ส้ม=mismatch)
 
+## 11. Plugin/module pipeline (parity KOS — A11)
+
+หลักฐาน (live KOS 2026-10-20 + ไฟล์จริงจาก CDN):
+```
+กดเล่น → GET https://koscheat.xyz/apk/50003657687a67084f6d691678e9a422cfbb6b72.bin
+        (ไฟล์ = APK จริง: classes.dex + libmkos.so 13.7MB + libbytehook + libshadowhook)
+        sha256(file) = acc706395e30… = loader_com.miniclip.eightballpool ใน KOS_App_Settings.xml  ← ตัวตน "loader"
+        เก็บ cache: /data/user/0/com.kos/cache/<serverId>.bin   (VM config pathToApk ชี้ไฟล์นี้)
+        กระจาย: guest data/app_plugin_workspace_p0 → apk ที่ VM โหลดเข้าเกสต์
+```
+AetherEngine (`com.aether.container.PluginInstaller`):
+- code "O" / step 3.9 ใน GuestLauncher / background ตอนกด "M"
+- `root/cache/<sha256>.bin` (self-record — KOS ใช้ serverId: deviation ที่ตั้งใจ) + verify sha ตัวเอง
+- distribute → `root/data/user/0/<pkg>/app_plugin_workspace_p0/plugin.apk`
+- บันทึก `setting.plugin = {url, path, sha256, size, downloadedAt, id, workspace{file,size,at}}`
+- snapshot/UI: pluginReady/pluginSha + ปุ่ม "Plugin"
+
 ## Level of parity
 
 | ชั้น | สถานะ | หมายเหตุ |

@@ -68,6 +68,7 @@ AetherEngine/
 - **A2a** ✅ proxy `:p0–:p3` ครบ + VPN + permission battery + CI manifest gate
 - **A2b** ✅ browser ในแอป + zip share/provider + image picker/compress (codes I/J/K)
 - **A3** ✅ native เต็มชุด 10 methods + blob table ×4 + DeviceRegistry + gate native
+- **A11** ✅ plugin/module pipeline: download .bin→cache/<sha>.bin→verify→distribute app_plugin_workspace_p0→conf (code "O" + auto on launch; sha=loader identity per KOS evidence)
 - **A10** ✅ version subsystem: VersionUtil + pin/allowedVersions/policy ต่อเกม (8BP pin 56.31.0 listed {31.0,31.1,32.0}) — ใช้ใน install/conf/launch-gate/snapshot/UI
 - **A9** ✅ install source = แอปที่ติดตั้งบนเครื่อง (sourceDir+splits) — code "N" + ปุ่ม UI + multi-apk loader/natives (ไม่ใช้ไฟล์ /sdcard อีก)
 - **A8** ✅ sandbox layout parity ตาม kos_engine: cache stubs · app-staging · profiles/{cur,ref} · xposed/developer-module.conf · guest data subdirs ครบ (ensureBase/ensureGuest จาก postInit)

@@ -22,9 +22,10 @@ public final class TargetRegistry {
         public final String versionPolicy;  // exact | listed | any
         public final String moduleVersion;  // module ที่สอดคล้อง
         public final String icon;
+        public final String pluginUrl;      // plugin/module .bin (ดาวน์โหลดตอนกดเล่น — parity KOS)
 
         Target(String id, String name, String pkg, String pinVersion, String[] allowedVersions,
-               String versionPolicy, String moduleVersion, String icon) {
+               String versionPolicy, String moduleVersion, String icon, String pluginUrl) {
             this.id = id;
             this.name = name;
             this.pkg = pkg;
@@ -33,6 +34,7 @@ public final class TargetRegistry {
             this.versionPolicy = versionPolicy;
             this.moduleVersion = moduleVersion;
             this.icon = icon;
+            this.pluginUrl = pluginUrl;
         }
     }
 
@@ -42,11 +44,12 @@ public final class TargetRegistry {
         // 8BP: pin 56.31.0 (เป้าหมาย reference) + listed 56.32.0 (เวอร์ชันที่ติดตั้งบนเครื่อง/entry ฝั่งต้นแบบ)
         TARGETS.add(new Target("eightballpool", "8 Ball Pool", "com.miniclip.eightballpool",
                 "56.31.0", new String[]{"56.31.0", "56.32.0", "56.31.1"}, "listed",
-                "56.7.0", "eightballpool.png"));
+                "56.7.0", "eightballpool.png",
+                "https://koscheat.xyz/apk/50003657687a67084f6d691678e9a422cfbb6b72.bin"));
         TARGETS.add(new Target("carrom", "Carrom Pool", "com.miniclip.carrom",
-                "19.5.2", new String[]{"19.5.2"}, "listed", "18.5.1", "carrom.png"));
+                "19.5.2", new String[]{"19.5.2"}, "listed", "18.5.1", "carrom.png", null));
         TARGETS.add(new Target("soccerstars", "Soccer Stars", "com.miniclip.soccerstars",
-                "37.1.1", new String[]{"37.1.1"}, "listed", "36.5.2", "soccerstars.png"));
+                "37.1.1", new String[]{"37.1.1"}, "listed", "36.5.2", "soccerstars.png", null));
     }
 
     private TargetRegistry() {}
