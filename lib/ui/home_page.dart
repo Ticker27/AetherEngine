@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../core/engine_channel.dart';
 import '../i18n/l10n.dart';
 
-/// HomePage — engine console + Supported Games (pin 56.31.0 · sandbox · device)
+/// HomePage — Supported Games (สะอาด): การ์ดเดียวต่อเกม + ปุ่ม Play หลัก + เมนู ⋮ สำหรับงานเสริม
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -14,45 +14,67 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final List<String> _log = <String>[];
   List<Map<String, dynamic>> _targets = <Map<String, dynamic>>[];
+  bool _busy = false;
 
   @override
   void initState() {
     super.initState();
-    EngineChannel.onImageResult((String payload) {
-      if (mounted) setState(() => _log.insert(0, 'imageResult → $payload'));
-    });
     _refresh();
   }
 
-  Future<void> _run(String label, Future<String?> Function() op) async {
+  Future<void> _run(String job, {required String pkg, required bool refreshAfter}) async {
+    if (_busy) return;
+    setState(() => _busy = true);
     String out;
     try {
-      out = (await op()) ?? 'null';
+      switch (job) {
+        case 'M':
+          out = await EngineChannel.launchContainer(pkg) ?? 'null';
+          break;
+        case 'N':
+          out = await EngineChannel.installFromDevice(pkg) ?? 'null';
+          break;
+        case 'O':
+          out = await EngineChannel.fetchPlugin(pkg) ?? 'null';
+          break;
+        case 'K':
+          out = await EngineChannel.pickApk() ?? 'null';
+          break;
+        default:
+          out = '';
+      }
     } catch (e) {
       out = 'ERR: $e';
     }
-    setState(() => _log.insert(0, '$label → $out'));
-    if (label.contains('"K"')) _refresh();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (refreshAfter) _refresh();
+    if (out.isNotEmpty && !out.startsWith('installed-started')) {
+      ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text('$job → $out', maxLines: 2, overflow: TextOverflow.ellipsis)),
+      );
+    }
   }
 
   Future<void> _refresh() async {
     try {
       final String? raw = await EngineChannel.targets();
-      final List<dynamic> arr = (raw == null || raw.isEmpty) ? <dynamic>[] : jsonDecode(raw) as List<dynamic>;
-      setState(() => _targets = arr.cast<Map<String, dynamic>>());
-    } catch (e) {
-      setState(() => _log.insert(0, 'targets → ERR: $e'));
-    }
+      final List<dynamic> arr =
+          (raw == null || raw.isEmpty) ? <dynamic>[] : jsonDecode(raw) as List<dynamic>;
+      if (mounted) setState(() => _targets = arr.cast<Map<String, dynamic>>());
+    } catch (_) {}
   }
 
   Color _statusColor(String? status, ColorScheme cs) {
     switch (status) {
       case 'match':
-        return Colors.green;
+        return Colors.green.shade600;
+      case 'allowed':
+        return Colors.blue.shade600;
       case 'mismatch':
-        return Colors.orange;
+        return Colors.orange.shade700;
       default:
         return cs.outline;
     }
@@ -76,107 +98,111 @@ class _HomePageState extends State<HomePage> {
     final L10n l = L10n.current();
     final ColorScheme cs = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: Text(l.get('supportedGames'))),
-      body: ListView(
-        padding: const EdgeInsets.all(12),
-        children: <Widget>[
-          ..._targets.map((Map<String, dynamic> t) {
-            final String? status = t['status']?.toString();
-            return Card(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.asset(
-                            'assets/targets/${t['icon']}',
-                            width: 36,
-                            height: 36,
-                            errorBuilder: (_, __, ___) => const Icon(Icons.sports_esports),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text('${t['name'] ?? '?'}',
-                              style: Theme.of(context).textTheme.titleMedium),
-                        ),
-                        Icon(Icons.circle, size: 10, color: _statusColor(status, cs)),
-                        const SizedBox(width: 4),
-                        Text(_statusLabel(l, status)),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'pin ${t['pin']} (${t['policy']}) · sandbox ${t['sandboxVersion'] ?? '—'} · device ${t['deviceVersion'] ?? '—'}',
-                      style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: <Widget>[
-                        TextButton(
-                          onPressed: () => _run('"K" pick apk', () => EngineChannel.pickApk()),
-                          child: Text(l.get('installApk')),
-                        ),
-                        TextButton(
-                          onPressed: () => _run('"O" plugin ${t['pkg']}',
-                              () => EngineChannel.fetchPlugin('${t['pkg']}')).then((_) => _refresh()),
-                          child: Text(l.get('downloadPlugin')),
-                        ),
-                        TextButton(
-                          onPressed: () => _run('"N" install from device ${t['pkg']}',
-                              () => EngineChannel.installFromDevice('${t['pkg']}')).then((_) => _refresh()),
-                          child: Text(l.get('installDevice')),
-                        ),
-                        FilledButton.tonal(
-                          onPressed: () => _run('"M" launch ${t['pkg']}',
-                              () => EngineChannel.launchContainer('${t['pkg']}')).then((_) => _refresh()),
-                          child: Text(l.get('launch')),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }),
-          Card(
+      appBar: AppBar(
+        title: Text(l.get('supportedGames'), overflow: TextOverflow.ellipsis),
+        actions: <Widget>[
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: _busy ? null : _refresh,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+        itemCount: _targets.length,
+        itemBuilder: (BuildContext context, int i) {
+          final Map<String, dynamic> t = _targets[i];
+          final String? status = t['status']?.toString();
+          final String sandbox = t['sandboxVersion']?.toString() ?? '—';
+          final String device = t['deviceVersion']?.toString() ?? '—';
+          return Card(
+            margin: const EdgeInsets.only(bottom: 10),
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Row(
                     children: <Widget>[
-                      Expanded(child: Text(l.get('engineConsole'), style: Theme.of(context).textTheme.titleMedium)),
-                      TextButton(onPressed: _refresh, child: Text(l.get('refresh'))),
-                    ],
-                  ),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: <Widget>[
-                      FilledButton(onPressed: () => _run('"A" toast', () => EngineChannel.toast('hello from Dart')), child: const Text('A · toast')),
-                      FilledButton(onPressed: () => _run('"0" djp(0)', () => EngineChannel.blob(0)), child: const Text('0 · blob')),
-                      FilledButton(onPressed: () => _run('"B" put', () => EngineChannel.prefsPut('demo_key', 'ok')), child: const Text('B · prefs put')),
-                      FilledButton(onPressed: () => _run('"D" get', () => EngineChannel.prefsGet('demo_key')), child: const Text('D · prefs get')),
-                      FilledButton(onPressed: () => _run('"F" cached', () => EngineChannel.cached()), child: const Text('F · cached')),
-                      FilledButton(onPressed: () => _run('"L" device', () => EngineChannel.deviceInfo()), child: const Text('L · device')),
-                      FilledButton(onPressed: () => _run('"I" pick image', () => EngineChannel.pickImage()), child: Text(l.get('pickImage'))),
-                      FilledButton(onPressed: () => _run('"J" zip share', () => EngineChannel.zipShare()), child: Text(l.get('zipShare'))),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.asset(
+                          'assets/targets/${t['icon']}',
+                          width: 44,
+                          height: 44,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              Container(width: 44, height: 44, color: cs.surfaceContainerHighest,
+                                  child: Icon(Icons.sports_esports, color: cs.onSurfaceVariant)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text('${t['name'] ?? '?'}',
+                                maxLines: 1, overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleMedium),
+                            const SizedBox(height: 2),
+                            Row(
+                              children: <Widget>[
+                                Icon(Icons.circle, size: 9, color: _statusColor(status, cs)),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(_statusLabel(l, status),
+                                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(color: _statusColor(status, cs), fontSize: 12)),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      PopupMenuButton<String>(
+                        tooltip: 'More',
+                        onSelected: (String v) =>
+                            _run(v, pkg: '${t['pkg']}', refreshAfter: v != 'M'),
+                        itemBuilder: (BuildContext bc) => <PopupMenuEntry<String>>[
+                          PopupMenuItem<String>(
+                              value: 'N', child: Text(l.get('installDevice'))),
+                          PopupMenuItem<String>(
+                              value: 'O', child: Text(l.get('downloadPlugin'))),
+                          const PopupMenuDivider(),
+                          PopupMenuItem<String>(
+                              value: 'K', child: Text("${l.get('installApk')} (K)")),
+                        ],
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text(_log.take(8).join('\n'),
-                      style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+                  Row(
+                    children: <Widget>[
+                      Text('${t['pin'] ?? '—'}',
+                          style: TextStyle(fontSize: 11, color: cs.outline)),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text('sb $sandbox · dev $device',
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 11, color: cs.outline)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _busy ? null : () => _run('M', pkg: '${t['pkg']}', refreshAfter: false),
+                      icon: const Icon(Icons.play_arrow_rounded),
+                      label: Text(l.get('launch')),
+                    ),
+                  ),
                 ],
               ),
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
