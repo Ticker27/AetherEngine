@@ -61,6 +61,21 @@ public final class AetherCore {
         android.util.Log.i("AetherEngine", "AetherCore.postInit: " + apps.size() + " container app(s)");
         android.util.Log.i("AetherEngine", "device: " + com.aether.util.DeviceRegistry.summary(ctx));
         seedTargetIcons(ctx);
+
+        // ให้โครง sandbox ครบ parity (kos_engine layout) และตรงกับ guest ที่มีอยู่จริง
+        try {
+            SandboxStore.ensureBaseLayout(ctx);
+            int n = 0;
+            for (TargetRegistry.Target t : TargetRegistry.all()) {
+                if (SandboxStore.guestApk(ctx, t.pkg).exists()) {
+                    SandboxStore.ensureGuestLayout(ctx, t.pkg);
+                    n++;
+                }
+            }
+            android.util.Log.i("AetherEngine", "sandbox: base layout ready, guests=" + n);
+        } catch (Throwable t) {
+            android.util.Log.w("AetherEngine", "sandbox ensure: " + t);
+        }
     }
 
     /** seed ไอคอนเป้าหมายจาก assets → ContentCache (files/<sha256>) — กลไกเดียวกับแคช asset ของต้นแบบ */

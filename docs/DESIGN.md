@@ -159,6 +159,26 @@ com.aether.fake.service.IPackageManagerProxy
 สถานะ Round 1: ติดตั้ง/มีผลจริง (device-proof), API ครบสำหรับต่อ Round 2
 (redirect ไป IBActivityThread/proxy :pN ตาม KOS)
 
+## 8. Sandbox layout parity — วัดจาก kos_engine จริง (2026-10-20)
+
+```
+kos_engine/                        ← ต้นแบบ (live, 8BP รันอยู่)        ─ AetherEngine files/root/ ( unserer)
+├ cache/{empty.apk,junit.apk}      stub APK                             ✅ cache/{empty,junit}.apk (empty-zip 22B)
+├ data/app-staging/                staging ของ PMS ติดตั้ง              ✅ data/app-staging/
+├ data/app/<pkg>/{lib,package.conf}                                     ✅ data/app/<pkg>/{base.apk,lib,package.conf,oat}
+├ data/user/0/<pkg>/…              files,cache,databases,shared_prefs,   ✅ ครบชุด + app_textures,
+│                                  no_backup,app_textures,               ✅ app_plugin_workspace_p0,
+│                                  app_plugin_workspace_p0,              ✅ app_plugin_odex_p0,
+│                                  app_plugin_odex_p0,app_webview…       ✅ app_webview_V_0_P0_<pkg>
+├ data/user_de/0/<pkg>/                                                  ✅
+├ profiles/cur/0/<pkg> · ref/0/<pkg>   ART profile redirection           ✅ profiles/{cur,ref}/0/<pkg>
+├ proc/ (fake cmdline)                                                   ✅ proc/0/cmdline
+└ system/{uid,user,shared-user,     conf ชุดเต็ม                        ✅ + xposed-module.conf,
+          xposed-module,developer-module}.conf                          ✅ developer-module.conf
+```
+จุดต่างโดยเจตนา: conf ของเราเป็น JSON (อ่าน/ทดสอบง่าย) — ต้นแบบเป็น binary serialization ของ BPackage;
+`oat/arm64/base.odex` เกิดจาก ART ตอนโหลดจริง (ทั้งคู่มี)
+
 ## Level of parity
 
 | ชั้น | สถานะ | หมายเหตุ |

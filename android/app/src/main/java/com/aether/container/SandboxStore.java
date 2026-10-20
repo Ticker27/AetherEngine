@@ -69,11 +69,24 @@ public final class SandboxStore {
         return d;
     }
 
+    /** guest data subdirs — parity จาก kos_engine/data/user/0/<pkg>/ (ดัมป์จริง 2026-10-20) */
+    private static final String[] GUEST_DATA_DIRS = {
+            "files", "cache", "databases", "shared_prefs", "no_backup",
+            "app_textures", "app_plugin_workspace_p0", "app_plugin_odex_p0",
+    };
+
     public static void ensureGuestLayout(Context c, String pkg) {
         mkdirs(guestDir(c, pkg));
         mkdirs(guestLibDir(c, pkg));
-        mkdirs(new File(new File(new File(new File(root(c), "data/user"), "0"), pkg), ""));
-        mkdirs(new File(new File(new File(new File(root(c), "data/user_de"), "0"), pkg), ""));
+        File user0 = new File(new File(root(c), "data/user"), "0");
+        File gdata = new File(user0, pkg);
+        mkdirs(gdata);
+        for (String d : GUEST_DATA_DIRS) mkdirs(new File(gdata, d));
+        mkdirs(new File(gdata, "app_webview_V_0_P0_" + pkg));
+        mkdirs(new File(new File(new File(root(c), "data/user_de"), "0"), pkg));
+        // ART profile redirection — parity kos_engine/profiles/{cur,ref}/0/<pkg>
+        mkdirs(new File(new File(new File(new File(root(c), "profiles"), "cur"), "0"), pkg));
+        mkdirs(new File(new File(new File(new File(root(c), "profiles"), "ref"), "0"), pkg));
     }
 
     /** fake /proc: root/proc/0/cmdline (หลักฐานจริงมีไฟล์นี้ — ใส่ชื่อ process ปลอม) */
@@ -83,16 +96,37 @@ public final class SandboxStore {
         writeText(new File(dir, "cmdline"), pkg);
     }
 
-    /** เตรียมโครง root + conf ตาม layout จริง */
+    /** empty zip = stub APK placeholder (parity kos_engine/cache/{empty,junit}.apk) */
+    private static final byte[] EMPTY_ZIP = {
+            0x50, 0x4B, 0x05, 0x06, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    };
+
+    /** เตรียมโครง root + conf ตาม layout จริง (เทียบ kos_engine/ ทีละบรรทัด) */
     public static void ensureBaseLayout(Context c) {
         mkdirs(systemDir(c));
         mkdirs(new File(root(c), "cache"));
-        for (String name : new String[]{"uid.conf", "shared-user.conf"}) {
+        mkdirs(new File(root(c), "proc"));
+        mkdirs(new File(new File(root(c), "data"), "app-staging"));
+        mkdirs(new File(new File(root(c), "profiles"), "cur"));
+        mkdirs(new File(new File(root(c), "profiles"), "ref"));
+        for (String name : new String[]{"uid.conf", "shared-user.conf",
+                "xposed-module.conf", "developer-module.conf"}) {
             File f = systemConf(c, name);
             if (!f.exists()) writeText(f, "{}");
         }
         File uf = systemConf(c, "user.conf");
         if (!uf.exists()) writeText(uf, "{\"users\":[{\"id\":0}]}");
+        // cache stubs (parity: kos_engine/cache/empty.apk + junit.apk)
+        for (String name : new String[]{"empty.apk", "junit.apk"}) {
+            File f = new File(new File(root(c), "cache"), name);
+            if (!f.exists()) {
+                try (FileOutputStream out = new FileOutputStream(f)) {
+                    out.write(EMPTY_ZIP);
+                } catch (Exception e) {
+                    android.util.Log.w("AetherEngine", "cache stub: " + e.getMessage());
+                }
+            }
+        }
     }
 
     // ── package.conf (per-guest ที่ app dir) ────────────────────
