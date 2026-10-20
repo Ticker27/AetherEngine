@@ -75,6 +75,15 @@ public final class PluginInstaller {
         String sha = downloadOffMain(t.pluginUrl, tmp, timeoutMs);
         if (sha == null) return "download-failed";
 
+        File[] bins = cache.listFiles((d, n) -> n.endsWith(".bin"));
+        if (bins != null) {
+            for (File f : bins) {
+                if (!f.getName().equals(sha + ".bin")) {
+                    //noinspection ResultOfMethodCallIgnored
+                    f.delete();
+                }
+            }
+        }
         File dst = new File(cache, sha + ".bin");
         if (!tmp.renameTo(dst)) {
             try {
@@ -98,6 +107,14 @@ public final class PluginInstaller {
             if (!libDir.exists()) libDir.mkdirs();
             if (!oatDir.exists()) oatDir.mkdirs();
 
+            // ล้างของเก่าใน workspace (legacy plugin.apk + plugin_*.apk) — เก็บชุดเดียว
+            File[] olds = ws.listFiles((d, n) -> n.endsWith(".apk"));
+            if (olds != null) {
+                for (File f : olds) {
+                    //noinspection ResultOfMethodCallIgnored
+                    f.delete();
+                }
+            }
             File apk = new File(ws, "plugin_" + System.currentTimeMillis() + ".apk");
             copyFile(bin, apk);
             VPackageInstaller.markReadOnly(apk);   // Android 14+: dex ที่เขียนได้โหลดไม่ได้

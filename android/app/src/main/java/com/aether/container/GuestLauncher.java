@@ -141,8 +141,13 @@ public final class GuestLauncher {
                     cp.append(':').append(f.getAbsolutePath());
                 }
             }
-            ClassLoader guestLoader = new dalvik.system.PathClassLoader(
-                    cp.toString(), libDir.getAbsolutePath(), GuestLauncher.class.getClassLoader());
+            // ใช้ DexClassLoader + optimizedDirectory ชัดเจน → ART ไม่ไปงอก oat ใน data/app/<pkg> (ลดชั้น/ขนาด)
+            File guestOat = new File(new File(new File(SandboxStore.root(host), "cache"), "oat"), pkg);
+            if (!guestOat.exists()) guestOat.mkdirs();
+            ClassLoader guestLoader = new dalvik.system.DexClassLoader(
+                    cp.toString(), guestOat.getAbsolutePath(), libDir.getAbsolutePath(),
+                    GuestLauncher.class.getClassLoader());
+            android.util.Log.i(TAG, "guest oat dir=" + guestOat);
             android.util.Log.i(TAG, "guest: PathClassLoader apk=" + apk.getAbsolutePath()
                     + " lib=" + libDir.getAbsolutePath());
             com.aether.util.LogDump.stage(sLastSession, "[session] classloader ready (base+splits)");

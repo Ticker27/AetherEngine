@@ -103,8 +103,13 @@ public final class SandboxStore {
 
     /** เตรียมโครง root + conf ตาม layout จริง (เทียบ kos_engine/ ทีละบรรทัด) */
     public static void ensureBaseLayout(Context c) {
+        if (!root(c).exists()) mkdirs(root(c));
+        if (!root(c).canWrite()) {
+            android.util.Log.e("AetherEngine", "sandbox NOT writable (owner mismatch): " + root(c));
+        }
         mkdirs(systemDir(c));
         mkdirs(new File(root(c), "cache"));
+        mkdirs(new File(new File(root(c), "cache"), "oat"));
         mkdirs(new File(root(c), "proc"));
         mkdirs(new File(new File(root(c), "data"), "app-staging"));
         mkdirs(new File(new File(root(c), "profiles"), "cur"));
