@@ -72,7 +72,7 @@ public final class PluginInstaller {
         }
 
         File tmp = new File(cache, "aether_plugin.tmp");
-        String sha = download(t.pluginUrl, tmp, timeoutMs);
+        String sha = downloadOffMain(t.pluginUrl, tmp, timeoutMs);
         if (sha == null) return "download-failed";
 
         File dst = new File(cache, sha + ".bin");
@@ -183,6 +183,23 @@ public final class PluginInstaller {
             android.util.Log.w(TAG, "plugin extractLibs: " + t);
         }
         return n;
+    }
+
+    /** รัน download ให้พ้น main thread (กัน NetworkOnMainThreadException เมื่อถูกเรียกจาก Activity) */
+    private static String downloadOffMain(final String url, final File dst, final long timeoutMs) {
+        if (android.os.Looper.myLooper() == null
+                || android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+            return download(url, dst, timeoutMs);
+        }
+        final String[] out = new String[1];
+        Thread th = new Thread(() -> out[0] = download(url, dst, timeoutMs), "aether-plugin-dl");
+        th.start();
+        try {
+            th.join(Math.max(30000L, timeoutMs + 10000L));
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        }
+        return out[0];
     }
 
     private static String download(String urlStr, File dst, long timeoutMs) {
