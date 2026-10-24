@@ -15,14 +15,14 @@ import java.util.zip.ZipFile;
  * อ้างอิง: path mapping ของแบบจำลองใช้ PathClassLoader โหลด base.apk ของ guest —
  * ที่นี่คือส่วน "อ่าน manifest ของ guest" ที่ทำให้รู้ class ของ launcher โดยไม่ต้องพึ่งแอปที่ติดตั้งนอก
  */
-final class GuestManifest {
+public final class GuestManifest {
 
-    final String packageName;
-    final String applicationName;
-    final String launcherActivity;
-    final List<String> activities;
-    final List<String> providerNames = new ArrayList<>();
-    final List<String> providerAuthorities = new ArrayList<>();
+    public final String packageName;
+    public final String applicationName;
+    public final String launcherActivity;
+    public final List<String> activities;
+    public final List<String> providerNames = new ArrayList<>();
+    public final List<String> providerAuthorities = new ArrayList<>();
 
     private GuestManifest(String pkg, String appName, String launcher, List<String> acts) {
         this.packageName = pkg;
@@ -31,7 +31,7 @@ final class GuestManifest {
         this.activities = acts;
     }
 
-    static GuestManifest parse(String apkPath) throws Exception {
+    public static GuestManifest parse(String apkPath) throws Exception {
         byte[] axml;
         try (ZipFile zf = new ZipFile(apkPath)) {
             ZipEntry e = zf.getEntry("AndroidManifest.xml");

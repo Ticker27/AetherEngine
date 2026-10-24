@@ -49,7 +49,7 @@ public final class GuestRuntime {
         if (!GuestIdentity.isPrepared()) return "runtime:guest-not-prepared";
 
         String pkg = GuestIdentity.guestPkg();
-        java.io.File session = LogDump.recent();
+        java.io.File session = GuestIdentity.session();
 
         // 1) Context ของ process → ของเกสต์
         ContextFixer.fixContext(ctx.getApplicationContext(), GuestIdentity.hostPkg());

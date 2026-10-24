@@ -57,10 +57,16 @@ public class ProxyActivity extends Activity {
         }
     }
 
+    /** overload เดิมของ repo (ProxyPendingActivity / TransparentProxyActivity เรียกด้วย 1 arg) */
+    protected void renderStub(String kind) {
+        renderStub(kind, "");
+    }
+
     protected void renderStub(String kind, String note) {
         TextView tv = new TextView(this);
         tv.setGravity(Gravity.CENTER);
-        tv.setText(kind + "\n" + getLocalClassName() + "\n" + note);
+        tv.setText(note.isEmpty() ? kind + "\n" + getLocalClassName()
+                : kind + "\n" + getLocalClassName() + "\n" + note);
         setContentView(tv, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
     }
