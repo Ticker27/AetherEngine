@@ -25,6 +25,8 @@ public class SystemCallProvider extends ContentProvider {
 
     /** parity: method "VM" (container framework ของแบบจำลอง server lookup) */
     private static final String METHOD_VM = "VM";
+    /** dev control channel: สั่งงานผ่าน CommandRouter (เฉพาะ root/shell uid) — ใช้ทดสอบจาก adb/shizuku */
+    private static final String METHOD_CMD = "CMD";
     /** parity: key "_S_|_server_" */
     private static final String KEY_SERVER = "_S_|_server_";
 
@@ -39,6 +41,24 @@ public class SystemCallProvider extends ContentProvider {
     public Bundle call(String method, String arg, Bundle extras) {
         android.util.Log.i("AetherEngine", "call(method=" + method + ", arg=" + arg + ")");
         Bundle out = new Bundle();
+        if (METHOD_CMD.equals(method)) {
+            // จำกัดสิทธิ์: เฉพาะ root (0) และ shell (2000) เท่านั้น
+            int uid = android.os.Binder.getCallingUid();
+            if (uid != 0 && uid != 2000) {
+                out.putString("_S_|_retval_", "denied:calling-uid=" + uid);
+                return out;
+            }
+            try {
+                String code = arg != null && arg.contains(":") ? arg.substring(0, arg.indexOf(':')) : arg;
+                String argument = arg != null && arg.contains(":") ? arg.substring(arg.indexOf(':') + 1) : null;
+                String r = com.aether.CommandRouter.dispatch(getContext(), code, argument);
+                android.util.Log.i("AetherEngine", "CMD " + arg + " → " + r);
+                out.putString("_S_|_retval_", r == null ? "" : r);
+            } catch (Throwable t) {
+                out.putString("_S_|_retval_", "ERR:" + t);
+            }
+            return out;
+        }
         if (METHOD_VM.equals(method)) {
             // parity: e9.d(bundle, KEY_SERVER, binder) — ส่ง server binder ข้าม process
             IBinder vm = AetherCore.mainProcessBinder();  // AetherEngine: engine อยู่ in-process คืน null หรือ binder ที่มีอยู่

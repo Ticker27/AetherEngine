@@ -128,7 +128,26 @@ public final class AetherCore {
         adoptLegacyApkIfAny(ctx, targetPkg);
 
         java.io.File apk = SandboxStore.guestApk(ctx, targetPkg);
-        if (!apk.exists()) return "not-installed-in-sandbox";
+        if (!apk.exists()) {
+            // sandbox ว่าง — ถ้าแอปติดตั้งอยู่บนเครื่อง ให้ติดตั้งแล้วเปิดต่อให้เอง
+            // (ทำบน worker: copy APK หลักร้อย MB บน main thread = ANR)
+            if (installedVersion(ctx, targetPkg) == null) return "not-installed-in-sandbox";
+            final Context appCtx = ctx.getApplicationContext();
+            final String tp = targetPkg;
+            new Thread(() -> {
+                try {
+                    String ir = installFromDevice(appCtx, tp);
+                    com.aether.util.LogDump.engine(appCtx, "auto-install " + tp + " → " + ir);
+                    if (SandboxStore.guestApk(appCtx, tp).exists()) {
+                        String lr = GuestLauncher.launchViaStub(appCtx, tp);
+                        com.aether.util.LogDump.engine(appCtx, "auto-launch → " + lr);
+                    }
+                } catch (Throwable t) {
+                    com.aether.util.LogDump.engine(appCtx, "auto-install failed: " + t);
+                }
+            }, "aether-autoinstall").start();
+            return "installing-from-device:" + targetPkg + " (จะเปิดให้อัตโนมัติเมื่อติดตั้งเสร็จ)";
+        }
 
         JSONObject st = SandboxStore.readPackageSetting(ctx, targetPkg);
         String ver = st != null ? st.optString("versionName", "?") : "?";
@@ -156,11 +175,9 @@ public final class AetherCore {
             }
         }, "aether-plugin").start();
         SandboxStore.writeProcCmdline(ctx, targetPkg);   // fake /proc/0/cmdline (parity จากดัมป์จริง)
-        Intent it = new Intent(ctx, VStubActivity.class);
-        it.putExtra("target", targetPkg);
-        it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        ctx.startActivity(it);
-        return "launched-in-container:" + (t != null ? t.name : targetPkg) + "@" + ver;
+        // เปลี่ยนจาก VStubActivity (สร้าง Activity เองด้วย reflection) → proxy component + framework
+        String r = GuestLauncher.launchViaStub(ctx, targetPkg);
+        return r + " · " + (t != null ? t.name : targetPkg) + "@" + ver;
     }
 
     /**
