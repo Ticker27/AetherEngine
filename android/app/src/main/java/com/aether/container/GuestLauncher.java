@@ -132,6 +132,7 @@ public final class GuestLauncher {
 
         try {
             GuestIdentity.adoptProcessIdentity(ctx);
+            LogDump.stage(sSession, "[session] process identity adopted → " + pkg);
         } catch (Throwable t) {
             LogDump.stage(sSession, "[session] adopt skipped: " + t);
         }

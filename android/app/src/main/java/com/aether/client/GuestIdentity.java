@@ -80,13 +80,23 @@ public final class GuestIdentity {
         return ctx.getPackageName();
     }
 
+    /** ผลตัดสินว่า process นี้เป็น :pN — ต้อง cache
+     *  เพราะหลัง adoptProcessIdentity() เรียก Process.setArgV0(ชื่อเกม)
+     *  ทำให้ currentProcessName() คืนชื่อเกม → ถ้าคำนวณใหม่จะได้ false (บั๊กที่เจอจริง:
+     *  GuestRuntime.boot เห็นว่า "ไม่ใช่ stub process" แล้วออกก่อนสร้าง Application) */
+    private static volatile Boolean sStubProcess;
+
     /** process ที่ระบุใน manifest ตรงกับ process ที่รันอยู่หรือไม่ */
     public static boolean isStubProcess(Context ctx) {
+        Boolean cached = sStubProcess;
+        if (cached != null) return cached;
         String cur = currentProcessName(ctx);
+        boolean stub = false;
         for (String[] row : STUB_ACTIVITIES) {
-            if (cur.endsWith(row[0])) return true;
+            if (cur.endsWith(row[0])) { stub = true; break; }
         }
-        return false;
+        sStubProcess = stub;
+        return stub;
     }
 
     public static boolean isMainProcess(Context ctx) {
