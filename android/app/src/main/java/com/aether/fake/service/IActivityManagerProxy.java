@@ -113,40 +113,76 @@ public final class IActivityManagerProxy implements InvocationHandler {
         }
     }
 
-    /** ติดตั้ง singleton proxy */
+    /**
+     * ติดตั้ง singleton proxy
+     *
+     * กับดักที่เจอจริงบนเครื่อง (Android 17 / SDK 37, log: "mInstance null"):
+     *   ActivityManager.IActivityManagerSingleton เป็น android.util.Singleton แบบ lazy
+     *   ก่อนมีใครเรียก ActivityManager.getService() ครั้งแรก mInstance จะยังเป็น null
+     *   → อ่าน field ตรง ๆ ไม่ได้ ต้องเรียก Singleton.get() ให้มันสร้าง instance ก่อน
+     *
+     * VirtualApp ทำแบบเดียวกันโดยปริยาย (hook ติดตั้งหลัง framework เรียก getService แล้ว)
+     * แต่เราติดตั้งใน attachBaseContext ซึ่งเร็วกว่านั้น จึงต้องบังคับ get() เอง
+     */
     public static boolean install(android.content.Context host) {
         try {
-            Class<?> iface = Class.forName("android.app.IActivityManager");
-            Object singleton = Reflect.get(Class.forName("android.app.ActivityManager"),
-                    "IActivityManagerSingleton");
+            Class<?> amCls = Class.forName("android.app.ActivityManager");
+
+            Object singleton = null;
+            for (String f : new String[]{"IActivityManagerSingleton", "sActivityManagerSingleton"}) {
+                try {
+                    java.lang.reflect.Field fld = amCls.getDeclaredField(f);
+                    fld.setAccessible(true);
+                    singleton = fld.get(null);
+                    if (singleton != null) {
+                        android.util.Log.i(TAG, "fake/ams: singleton via " + f);
+                        break;
+                    }
+                } catch (Throwable ignored) {}
+            }
             if (singleton == null) {
-                android.util.Log.w(TAG, "IActivityManagerSingleton not found");
+                android.util.Log.w(TAG, "fake/ams: IActivityManagerSingleton not found");
                 return false;
             }
+
             Object base = Reflect.get(singleton, "mInstance");
             if (base == null) {
-                android.util.Log.w(TAG, "mInstance null (setupApplication not called yet?)");
+                // บังคับให้ Singleton สร้าง instance (เทียบเท่า ActivityManager.getService())
+                try {
+                    Method get = singleton.getClass().getDeclaredMethod("get");
+                    get.setAccessible(true);
+                    base = get.invoke(singleton);
+                    android.util.Log.i(TAG, "fake/ams: forced Singleton.get() → "
+                            + (base != null ? base.getClass().getName() : "null"));
+                } catch (Throwable t) {
+                    android.util.Log.w(TAG, "fake/ams: Singleton.get failed: " + t);
+                }
+            }
+            if (base == null) {
+                android.util.Log.w(TAG, "fake/ams: base IActivityManager = null");
                 return false;
             }
             if (java.lang.reflect.Proxy.isProxyClass(base.getClass())) {
-                android.util.Log.i(TAG, "IActivityManager already proxied");
+                android.util.Log.i(TAG, "fake/ams: already proxied");
                 return true;
             }
-            IActivityManagerProxy handler = new IActivityManagerProxy(base, host);
-            ClassLoader cl = iface.getClassLoader();
-            Object proxy = java.lang.reflect.Proxy.newProxyInstance(cl, new Class[]{iface}, handler);
+
+            Class<?> iam = Class.forName("android.app.IActivityManager");
+            Object proxy = java.lang.reflect.Proxy.newProxyInstance(iam.getClassLoader(),
+                    new Class<?>[]{iam}, new IActivityManagerProxy(base, host));
             boolean ok = Reflect.set(singleton, "mInstance", proxy);
-            android.util.Log.i(TAG, "IActivityManager proxied=" + ok);
+            android.util.Log.i(TAG, "fake/ams: IActivityManager proxied=" + ok
+                    + " (base=" + base.getClass().getSimpleName() + ")");
             return ok;
         } catch (Throwable t) {
-            android.util.Log.w(TAG, "install IActivityManagerProxy failed", t);
+            android.util.Log.w(TAG, "fake/ams: install failed: " + t);
             return false;
         }
     }
 
-    /** token ของ activity ปัจจุบัน — AMS proxy บาง signature ต้องใช้ */
-    public static IBinder activityToken(android.app.Activity a) {
+    /** token ของ activity ปัจจุบัน */
+    public static android.os.IBinder activityToken(android.app.Activity a) {
         Object v = Reflect.get(a, "mToken");
-        return v instanceof IBinder ? (IBinder) v : null;
+        return v instanceof android.os.IBinder ? (android.os.IBinder) v : null;
     }
 }

@@ -203,6 +203,21 @@ public final class IPackageManagerProxy implements InvocationHandler {
             f.setAccessible(true);
             Object base = f.get(null);
             if (base == null) {
+                // framework ยังไม่ตั้ง sPackageManager — บังคับสร้างผ่าน ActivityThread.getPackageManager()
+                try {
+                    Class<?> ipm = Class.forName("android.content.pm.IPackageManager");
+                    java.lang.reflect.Method get = atCls.getDeclaredMethod("getPackageManager");
+                    get.setAccessible(true);
+                    base = get.invoke(null);
+                    android.util.Log.i(TAG, "fake/pms: forced getPackageManager()");
+                } catch (Throwable t) {
+                    android.util.Log.w(TAG, "fake/pms: force getPackageManager failed: " + t);
+                }
+                if (base == null) {
+                    base = f.get(null);
+                }
+            }
+            if (base == null) {
                 android.util.Log.w(TAG, "fake/pms: sPackageManager = null");
                 return false;
             }
