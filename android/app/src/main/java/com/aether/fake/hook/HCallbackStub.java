@@ -41,7 +41,7 @@ public final class HCallbackStub implements InvocationHandler {
 
     private final Handler.Callback mBase;
 
-    public HCallbackProxy(Handler.Callback base) {
+    public HCallbackStub(Handler.Callback base) {
         mBase = base;
     }
 
