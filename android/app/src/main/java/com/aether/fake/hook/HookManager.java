@@ -70,6 +70,38 @@ public final class HookManager {
         tryHiddenApiBypass();
         sAms = IActivityManagerProxy.install(ctx);
         android.util.Log.i(TAG, "fake: main hooks ams=" + sAms);
+        if (!sAms) scheduleRetry(ctx, false, 0);
+    }
+
+    /**
+     * attachBaseContext อาจเร็วเกินกว่า framework จะสร้าง IActivityManager/PackageManager
+     * → ติดตั้งไม่ได้ในจังหวะนั้น ลองซ้ำบน main thread แบบถี่ ๆ จนสำเร็จ (สูงสุด ~4 วินาที)
+     */
+    private static void scheduleRetry(final Context ctx, final boolean guest, final int attempt) {
+        if (attempt >= 10) {
+            android.util.Log.w(TAG, "fake: retry exhausted (guest=" + guest + ") — hooks not installed");
+            return;
+        }
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+            boolean stillMissing;
+            if (guest) {
+                if (!sAms) sAms = IActivityManagerProxy.install(ctx);
+                if (!sPms) sPms = IPackageManagerProxy.install(ctx);
+                if (!sInstr) sInstr = AppInstrumentation.install(ctx);
+                if (!sHcb) sHcb = HCallbackStub.install();
+                stillMissing = !(sAms && sPms && sInstr && sHcb);
+            } else {
+                if (!sAms) sAms = IActivityManagerProxy.install(ctx);
+                stillMissing = !sAms;
+            }
+            if (stillMissing) {
+                scheduleRetry(ctx, guest, attempt + 1);
+            } else {
+                android.util.Log.i(TAG, "fake: hooks ready after retry#" + attempt
+                        + " (guest=" + guest + ") ams=" + sAms + " pms=" + sPms
+                        + " instr=" + sInstr + " hcb=" + sHcb);
+            }
+        }, 400);
     }
 
     private static void installGuestHooks(Context ctx) {
@@ -85,6 +117,7 @@ public final class HookManager {
 
         android.util.Log.i(TAG, "fake: guest hooks instr=" + sInstr + " ams=" + sAms
                 + " pms=" + sPms + " hcb=" + sHcb);
+        if (!(sAms && sPms && sInstr && sHcb)) scheduleRetry(ctx, true, 0);
     }
 
     /**

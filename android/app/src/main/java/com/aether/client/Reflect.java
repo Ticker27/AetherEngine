@@ -19,7 +19,36 @@ public final class Reflect {
     }
 
     public static Field field(Object obj, String name) {
-        return obj == null ? null : field(obj.getClass(), name);
+        if (obj == null) return null;
+        // ต้องเดินขึ้น hierarchy: field ส่วนใหญ่ declare ไว้บนคลาสแม่
+        // เช่น mCallback อยู่บน Handler (ไม่ใช่ ActivityThread$H), mToken อยู่บน Activity (ไม่ใช่คลาสของเกม)
+        Class<?> c = obj.getClass();
+        while (c != null && c != Object.class) {
+            try {
+                Field f = c.getDeclaredField(name);
+                f.setAccessible(true);
+                return f;
+            } catch (Throwable ignored) {
+                c = c.getSuperclass();
+            }
+        }
+        return null;
+    }
+
+    /** หา Method เดินขึ้น hierarchy (get() ของ Singleton อยู่บนคลาสแม่) */
+    public static Method method(Object obj, String name, Class<?>... types) {
+        if (obj == null) return null;
+        Class<?> c = obj.getClass();
+        while (c != null && c != Object.class) {
+            try {
+                Method m = c.getDeclaredMethod(name, types);
+                m.setAccessible(true);
+                return m;
+            } catch (Throwable ignored) {
+                c = c.getSuperclass();
+            }
+        }
+        return null;
     }
 
     public static Object get(Class<?> cls, String name) {

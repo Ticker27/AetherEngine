@@ -149,9 +149,16 @@ public final class IActivityManagerProxy implements InvocationHandler {
             if (base == null) {
                 // บังคับให้ Singleton สร้าง instance (เทียบเท่า ActivityManager.getService())
                 try {
-                    Method get = singleton.getClass().getDeclaredMethod("get");
-                    get.setAccessible(true);
-                    base = get.invoke(singleton);
+                    // get() ประกาศบน android.util.Singleton — ต้องเดินขึ้น hierarchy
+                    // (ของจริง singleton เป็น anonymous subclass ActivityManager$4)
+                    Method get = Reflect.method(singleton, "get");
+                    if (get == null) {
+                        get = Reflect.method(singleton, "get", new Class<?>[0]);
+                    }
+                    if (get != null) {
+                        get.setAccessible(true);
+                        base = get.invoke(singleton);
+                    }
                     android.util.Log.i(TAG, "fake/ams: forced Singleton.get() → "
                             + (base != null ? base.getClass().getName() : "null"));
                 } catch (Throwable t) {
