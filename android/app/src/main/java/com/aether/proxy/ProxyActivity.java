@@ -1,38 +1,68 @@
 package com.aether.proxy;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.Gravity;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
+import com.aether.client.GuestIdentity;
+import com.aether.remote.StubActivityRecord;
+
 /**
  * ProxyActivity — stub activity ของ container (ฐานของ P0–P3 / P0L–P3L)
  *
- * โครงเดียวกับแบบจำลอง: process ละชุด (:p0–:p3) + landscape variant แยก
- * แบบจำลองเต็มจะ route เข้า activity จริงของแอปเป้าหมายผ่าน framework hook;
- * ที่นี่เป็นโครง stub ที่แสดงสถานะ + log เพื่อให้โครง process/component ครบ
+ * เปลี่ยนจาก "จอปลายทาง" เป็น "ประตู" ตามกลไก VirtualApp:
+ *   onCreate → super.onCreate(null) → finish()
+ *   → ถอด StubActivityRecord (`_VA_|_intent_` / `_VA_|_info_`) ออกจาก intent
+ *   → ถ้า process ตรงกับ info.processName → startActivity(อินเทนต์เกสต์) อีกครั้ง
+ *     (รอบนี้ HCallback ที่ติดตั้งไว้แล้วจะสลับ activityInfo เป็นของเกสต์
+ *      → AppInstrumentation สร้างคลาสของเกม → onCreate ของเกมทำงาน)
+ *   → ถ้าไม่ตรง → เปิด stub ตัวที่ผูก process เป้าหมาย
+ *
+ * หมายเหตุ: ในเส้นทางปกติ (hook ติด) ProxyActivity จะไม่ถูกเรียกเลย เพราะ HCallback
+ * สลับคลาสก่อน framework สร้าง — คลาสนี้จึงเป็น fallback + หลักประกันว่า process :pN ตื่น
  */
 public class ProxyActivity extends Activity {
 
-    protected void renderStub(String kind) {
-        String target = getIntent() != null ? getIntent().getStringExtra("target") : null;
-        String mode = getIntent() != null ? getIntent().getStringExtra("mode") : null;
-        TextView tv = new TextView(this);
-        tv.setGravity(Gravity.CENTER);
-        tv.setText("AetherEngine " + kind
-                + "\n" + getLocalClassName()
-                + "\ntarget: " + (target == null ? "(none)" : target)
-                + "\nmode: " + (mode == null ? "-" : mode));
-        setContentView(tv, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-        android.util.Log.i("AetherEngine", kind + " " + getLocalClassName() + " target=" + target);
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(null);
+        finish();
+
+        StubActivityRecord r = new StubActivityRecord(getIntent());
+        if (r.intent == null) {
+            renderStub("ProxyActivity", "no-stashed-intent");
+            return;
+        }
+
+        String here = GuestIdentity.currentProcessName(this);
+        String target = r.info != null && r.info.processName != null
+                ? r.info.processName : here;
+
+        if (r.retry >= 2) {
+            renderStub("ProxyActivity", "retry-limit — HCallback/Instrumentation ไม่ทำงาน");
+            android.util.Log.e("AetherEngine", "proxy: retry limit; hook ไม่ติดใน " + here);
+            return;
+        }
+        r.intent.putExtra(StubActivityRecord.KEY_RETRY, r.retry + 1);
+
+        if (TextUtils.equals(target, here)) {
+            r.intent.setExtrasClassLoader(getClassLoader());
+            startActivity(r.intent);
+        } else {
+            GuestIdentity.requestCrossProcessLaunch(this, r);
+        }
     }
 
-    @Override
-    protected void onCreate(Bundle b) {
-        super.onCreate(b);
-        renderStub("ProxyActivity");
+    protected void renderStub(String kind, String note) {
+        TextView tv = new TextView(this);
+        tv.setGravity(Gravity.CENTER);
+        tv.setText(kind + "\n" + getLocalClassName() + "\n" + note);
+        setContentView(tv, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
     }
 
     // ── :p0 ──

@@ -156,11 +156,9 @@ public final class AetherCore {
             }
         }, "aether-plugin").start();
         SandboxStore.writeProcCmdline(ctx, targetPkg);   // fake /proc/0/cmdline (parity จากดัมป์จริง)
-        Intent it = new Intent(ctx, VStubActivity.class);
-        it.putExtra("target", targetPkg);
-        it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        ctx.startActivity(it);
-        return "launched-in-container:" + (t != null ? t.name : targetPkg) + "@" + ver;
+        // เปลี่ยนจาก VStubActivity (สร้าง Activity เองด้วย reflection) → proxy component + framework
+        String r = GuestLauncher.launchViaStub(ctx, targetPkg);
+        return r + " · " + (t != null ? t.name : targetPkg) + "@" + ver;
     }
 
     /**

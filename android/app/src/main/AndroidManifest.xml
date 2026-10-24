@@ -82,12 +82,6 @@
         </activity>
 
         <activity
-            android:name="com.aether.container.VStubActivity"
-            android:process=":p0"
-            android:exported="false"
-            android:configChanges="locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density|layoutDirection|colorMode" />
-
-        <activity
             android:name="com.aether.proxy.TransparentProxyActivity"
             android:exported="false"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />

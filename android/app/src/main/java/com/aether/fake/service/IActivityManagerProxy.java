@@ -1,119 +1,152 @@
 package com.aether.fake.service;
 
-import java.lang.reflect.Field;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.ActivityInfo;
+import android.os.IBinder;
+import android.text.TextUtils;
+
+import com.aether.client.ComponentResolver;
+import com.aether.client.GuestIdentity;
+import com.aether.client.Reflect;
+import com.aether.remote.StubActivityRecord;
+
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
 
 /**
- * IActivityManagerProxy — proxy ระดับบริการ activity (โครงเดียวกับ
- * com.kos.engine.fake.service.IActivityManagerProxy + IBActivityManagerService$Stub$Proxy ของ KOS)
+ * IActivityManagerProxy — IActivityManagerSingleton.mInstance → dynamic proxy
+ * (พอร์ตแนวทาง VirtualApp `client/hook/proxies/am/MethodProxies$StartActivity`)
  *
- * กลไก (ตาม KOS):
- *   ActivityManager.IActivityManagerSingleton (android.util.Singleton)
- *     → get() = IActivityManager เดิม
- *     → set(Proxy.newProxyInstance(IActivityManager, handler)) = ของเรา
- *   handler: ตรวจ method ที่เกี่ยวกับการเริ่ม component — log + delegate (passthrough)
- *   ชั้นถัดไป (round ถัด ๆ ไป): redirect component ของ guest ไป proxy :pN (ตาม KOS IBActivityThread)
+ * เหตุผลเชิงกลไก:
+ *   component ของเกสต์ไม่มีใน PMS ของเครื่อง → ถ้าส่ง intent ของเกสต์เข้า AMS ตรง ๆ
+ *   จะได้ ActivityNotFoundException ทันที
+ *   → proxy เปลี่ยน component เป็น StubActivity$C0 (ซึ่งประกาศใน manifest จริง)
+ *     แล้วยัดอินเทนต์เดิมลง extras ตามคีย์ `_VA_|_intent_`
+ *   → ใน :p0, HCallback แทน activityInfo เป็นของเกสต์ → framework สร้างคลาสเกมจริง
+ *
+ * ครอบ method ที่ขึ้นต้นด้วย "startActivity", "startService", "stopService",
+ * "bindService", "getIntentSender" — signature ต่างกันตาม API จึงจับด้วยชื่อ + ชนิด arg
  */
 public final class IActivityManagerProxy implements InvocationHandler {
 
     private static final String TAG = "AetherEngine";
 
-    private final Object base;          // IActivityManager ตัวจริง
-    private static volatile boolean sHooked;
-    private static volatile String sTargetPkg;
+    private final Object mBase;
+    private final Context mHost;
 
-    private IActivityManagerProxy(Object base) {
-        this.base = base;
-    }
-
-    public static boolean install(String targetPkg) {
-        if (sHooked) return true;
-        try {
-            sTargetPkg = targetPkg;
-
-            Class<?> amCls = Class.forName("android.app.ActivityManager");
-            Field f = amCls.getDeclaredField("IActivityManagerSingleton");
-            f.setAccessible(true);
-            Object singleton = f.get(null);
-            if (singleton == null) {
-                android.util.Log.w(TAG, "fake/ams: IActivityManagerSingleton = null");
-                return false;
-            }
-
-            Method get = singleton.getClass().getMethod("get");
-            get.setAccessible(true);
-            Object base = get.invoke(singleton);
-            if (base == null) {
-                android.util.Log.w(TAG, "fake/ams: base IActivityManager = null");
-                return false;
-            }
-
-            Class<?> iam = Class.forName("android.app.IActivityManager");
-            Object proxy = Proxy.newProxyInstance(iam.getClassLoader(),
-                    new Class<?>[]{iam}, new IActivityManagerProxy(base));
-
-            boolean set = false;
-            try {
-                Method setm = singleton.getClass().getMethod("set", Object.class);
-                setm.setAccessible(true);
-                setm.invoke(singleton, proxy);
-                set = true;
-            } catch (Throwable t1) {
-                for (Class<?> c = singleton.getClass(); c != null; c = c.getSuperclass()) {
-                    try {
-                        Field mInst = c.getDeclaredField("mInstance");
-                        mInst.setAccessible(true);
-                        mInst.set(singleton, proxy);
-                        set = true;
-                        break;
-                    } catch (NoSuchFieldException ignored) {
-                    }
-                }
-                if (!set) {
-                    android.util.Log.w(TAG, "fake/ams: cannot set singleton (" + singleton.getClass().getName() + ")");
-                }
-            }
-            sHooked = set;
-            android.util.Log.i(TAG, "fake/ams: IActivityManager proxy installed=" + set
-                    + " target=" + targetPkg);
-            return set;
-        } catch (Throwable t) {
-            android.util.Log.w(TAG, "fake/ams: install failed: " + t);
-            return false;
-        }
+    public IActivityManagerProxy(Object base, Context host) {
+        mBase = base;
+        mHost = host;
     }
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
         String name = method.getName();
-        if (name.startsWith("startActivity") || name.equals("startService")
-                || name.equals("stopService") || name.equals("bindService")
-                || name.equals("getIntentSender") || name.equals("registerReceiver")) {
-            try {
-                if (args != null) {
-                    for (Object a : args) {
-                        if (a instanceof android.content.Intent) {
-                            android.content.Intent it = (android.content.Intent) a;
-                            if (it.getComponent() != null
-                                    && sTargetPkg != null
-                                    && sTargetPkg.equals(it.getComponent().getPackageName())) {
-                                android.util.Log.i(TAG, "fake/ams: " + name
-                                        + " guest component → " + it.getComponent().flattenToShortString()
-                                        + " (passthrough; redirect ในเฟสถัดไป)");
-                                break;
-                            }
-                        }
-                    }
-                }
-            } catch (Throwable ignored) {
+        if (args != null && GuestIdentity.isPrepared()) {
+            if (name.startsWith("startActivity")) {
+                rewriteActivityIntent(method, args);
+            } else if (name.equals("startService") || name.equals("bindService")
+                    || name.equals("stopService")) {
+                rewriteServiceIntent(args);
+            }
+        } else {
+            if (args != null) pruneGuestPackagesOnLeave(args);
+        }
+        return method.invoke(mBase, args);
+    }
+
+    /** แก้ args[0] (Intent) ให้ชี้ stub พร้อม stash */
+    private void rewriteActivityIntent(Method method, Object[] args) {
+        Intent intent = null;
+        int idx = -1;
+        for (int i = 0; i < args.length; i++) {
+            if (args[i] instanceof Intent) { intent = (Intent) args[i]; idx = i; break; }
+            if (args[i] instanceof String && i + 1 < args.length && args[i + 1] instanceof Intent) {
+                intent = (Intent) args[i + 1]; idx = i + 1; break;
             }
         }
-        try {
-            return method.invoke(base, args);
-        } catch (java.lang.reflect.InvocationTargetException ite) {
-            throw ite.getCause();
+        if (intent == null || idx < 0) return;
+
+        // กันลูป: อินเทนต์ที่มี stash อยู่แล้ว = ยิงซ้ำจาก StubActivity → ปล่อยผ่าน
+        if (intent.hasExtra(StubActivityRecord.KEY_INTENT)) return;
+
+        String pkg = GuestIdentity.guestPkg();
+        String className = null;
+        if (intent.getComponent() != null) {
+            className = intent.getComponent().getClassName();
         }
+        if (className == null) return;      // implicit intent → ปล่อยให้ระบบจัดการ
+
+        ActivityInfo info = ComponentResolver.resolveActivityInfo(mHost, pkg, className);
+        if (info == null) {
+            android.util.Log.w(TAG, "unresolved guest activity: " + className);
+            return;
+        }
+
+        Intent stub = GuestIdentity.makeStubIntent(mHost, intent, info, 0);
+        args[idx] = stub;
+        android.util.Log.i(TAG, "redirect " + className + " → " + stub.getComponent().flattenToShortString());
+    }
+
+    private void rewriteServiceIntent(Object[] args) {
+        Intent intent = null;
+        int idx = -1;
+        for (int i = 0; i < args.length; i++) {
+            if (args[i] instanceof Intent) { intent = (Intent) args[i]; idx = i; break; }
+        }
+        if (intent == null || idx < 0) return;
+        if (intent.getComponent() == null) return;
+        String pkg = GuestIdentity.guestPkg();
+        if (!TextUtils.equals(intent.getComponent().getPackageName(), pkg)) return;
+        android.util.Log.i(TAG, "service intent for guest (passthrough, stub service not declared yet): "
+                + intent.getComponent().getClassName());
+    }
+
+    /** ใน main process: ลบชื่อ package ของเกสต์ออกจาก arg ที่ส่งเข้า AMS (กัน NameNotFound) */
+    private void pruneGuestPackagesOnLeave(Object[] args) {
+        for (int i = 0; i < args.length; i++) {
+            if (args[i] instanceof String) {
+                String s = (String) args[i];
+                if (s.startsWith(mHost.getPackageName() + ".virt")) args[i] = mHost.getPackageName();
+            }
+        }
+    }
+
+    /** ติดตั้ง singleton proxy */
+    public static boolean install(android.content.Context host) {
+        try {
+            Class<?> iface = Class.forName("android.app.IActivityManager");
+            Object singleton = Reflect.get(Class.forName("android.app.ActivityManager"),
+                    "IActivityManagerSingleton");
+            if (singleton == null) {
+                android.util.Log.w(TAG, "IActivityManagerSingleton not found");
+                return false;
+            }
+            Object base = Reflect.get(singleton, "mInstance");
+            if (base == null) {
+                android.util.Log.w(TAG, "mInstance null (setupApplication not called yet?)");
+                return false;
+            }
+            if (java.lang.reflect.Proxy.isProxyClass(base.getClass())) {
+                android.util.Log.i(TAG, "IActivityManager already proxied");
+                return true;
+            }
+            IActivityManagerProxy handler = new IActivityManagerProxy(base, host);
+            ClassLoader cl = iface.getClassLoader();
+            Object proxy = java.lang.reflect.Proxy.newProxyInstance(cl, new Class[]{iface}, handler);
+            boolean ok = Reflect.set(singleton, "mInstance", proxy);
+            android.util.Log.i(TAG, "IActivityManager proxied=" + ok);
+            return ok;
+        } catch (Throwable t) {
+            android.util.Log.w(TAG, "install IActivityManagerProxy failed", t);
+            return false;
+        }
+    }
+
+    /** token ของ activity ปัจจุบัน — AMS proxy บาง signature ต้องใช้ */
+    public static IBinder activityToken(android.app.Activity a) {
+        Object v = Reflect.get(a, "mToken");
+        return v instanceof IBinder ? (IBinder) v : null;
     }
 }

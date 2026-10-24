@@ -1,133 +1,110 @@
 package com.aether.fake.hook;
 
 import android.content.Context;
-import android.os.Handler;
-import android.os.Message;
 
+import com.aether.client.GuestIdentity;
 import com.aether.fake.FakeCore;
 import com.aether.fake.delegate.AppInstrumentation;
 import com.aether.fake.service.IActivityManagerProxy;
 import com.aether.fake.service.IPackageManagerProxy;
-
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
+import com.aether.proxy.ProxyActivity;
 
 /**
- * HookManager — ติดตั้งชุด hook ของ fake framework (โครงเดียวกับ
- * com.kos.engine.fake.hook.HookManager ของ KOS)
+ * HookManager — ติดตั้งชุด hook ของ fake framework ใน process ที่ถูกต้อง
  *
- * ลำดับติดตั้ง (parity ตาม KOS FakeCore.init → HookManager):
- *   1) ActivityThread.mInstrumentation → AppInstrumentation
- *   2) IActivityManager  → IActivityManagerProxy (ServiceManager singleton)
- *   3) IPackageManager   → IPackageManagerProxy (ActivityThread.sPackageManager)
- *   4) Handler mH        → HCallback (logger; redirect ActivityRecord ในเฟสถัดไป)
+ * ลำดับ (parity KOS: FakeCore.init → HookManager):
+ *   :pN  (process ของเกสต์)
+ *     1) hidden API exemption (Android 9+ บังคับ reflect field ของ framework)
+ *     2) ActivityThread.mInstrumentation → AppInstrumentation
+ *     3) ActivityManager.IActivityManagerSingleton → IActivityManagerProxy   (intent เกสต์ → proxy :pN)
+ *     4) ActivityThread.sPackageManager → IPackageManagerProxy              (PackageInfo/ActivityInfo จาก sandbox)
+ *     5) ActivityThread.mH.mCallback → HCallbackStub                        (สลับ activityInfo ก่อน LAUNCH_ACTIVITY)
+ *   main process
+ *     ติดตั้งเฉพาะ (3) — เพื่อให้ intent ที่ชี้ component ของเกสต์ถูกเปลี่ยนเป็น proxy component
+ *     ห้ามติดตั้ง (2)(4)(5) ใน main: จะทำให้ framework ของ host ตอบเป็นเกสต์ (บั๊กที่ AUDIT A3)
  *
- * กติกา: ติดตั้งเฉพาะ process ที่โฮสต์เกสต์ (:p0) — main process ไม่แตะ
+ * Hook ต้องติดตั้งใน App.attachBaseContext ไม่ใช่ onCreate — ActivityThread ส่ง
+ * LAUNCH_ACTIVITY หลัง Application.onCreate เท่านั้น ถ้าติดช้าไป 1 จังหวะ message แรกจะหลุด
  */
 public final class HookManager {
 
     private static final String TAG = "AetherEngine";
 
-    private static volatile boolean sInstalled;
+    private static volatile boolean sMainInstalled;
+    private static volatile boolean sGuestInstalled;
+    private static volatile boolean sHiddenApiTried;
+    private static volatile boolean sAms, sPms, sInstr, sHcb;
 
     private HookManager() {}
 
-    /** HCallback แบบเบา: log message ของ ActivityThread.mH (โครง parity; consume=false) */
-    private static final class HCallbackLogger implements Handler.Callback {
-        private int n;
+    /** เรียกได้ทุก process, idempotent */
+    public static void installForProcess(Context ctx) {
+        if (GuestIdentity.isStubProcess(ctx)) installGuestHooks(ctx);
+        else installMainHooks(ctx);
+    }
 
-        @Override
-        public boolean handleMessage(Message msg) {
-            if (n < 24) {
-                n++;
-                android.util.Log.i(TAG, "fake/hcb: msg.what=" + msg.what);
-            }
-            return false;   // ไม่ consume — ปล่อยให้ handler เดิมทำงาน
+    private static synchronized void tryHiddenApiBypass() {
+        if (sHiddenApiTried) return;
+        sHiddenApiTried = true;
+        try {
+            java.lang.reflect.Method forName = Class.class.getDeclaredMethod("forName", String.class);
+            java.lang.reflect.Method getDeclaredMethod =
+                    Class.class.getDeclaredMethod("getDeclaredMethod", String.class, Class[].class);
+            Class<?> vmRuntime = (Class<?>) forName.invoke(null, "dalvik.system.VMRuntime");
+            java.lang.reflect.Method getRuntime = (java.lang.reflect.Method)
+                    getDeclaredMethod.invoke(vmRuntime, "getRuntime", (Object) null);
+            Object runtime = getRuntime.invoke(null);
+            java.lang.reflect.Method setExemptions = (java.lang.reflect.Method)
+                    getDeclaredMethod.invoke(vmRuntime, "setHiddenApiExemptions",
+                            (Object) new Class[]{String[].class});
+            setExemptions.invoke(runtime, (Object) new String[]{"L"});
+            android.util.Log.i(TAG, "fake: hiddenapi exemptions set");
+        } catch (Throwable t) {
+            android.util.Log.w(TAG, "fake: hiddenapi bypass unavailable: " + t);
         }
     }
 
+    private static void installMainHooks(Context ctx) {
+        if (sMainInstalled) return;
+        sMainInstalled = true;
+        tryHiddenApiBypass();
+        sAms = IActivityManagerProxy.install(ctx);
+        android.util.Log.i(TAG, "fake: main hooks ams=" + sAms);
+    }
+
+    private static void installGuestHooks(Context ctx) {
+        if (sGuestInstalled) return;
+        sGuestInstalled = true;
+        tryHiddenApiBypass();
+        try { FakeCore.init(); } catch (Throwable t) { android.util.Log.w(TAG, "FakeCore: " + t); }
+
+        sInstr = AppInstrumentation.install(ctx);
+        sAms = IActivityManagerProxy.install(ctx);
+        sPms = IPackageManagerProxy.install(ctx);
+        sHcb = HCallbackStub.install();
+
+        android.util.Log.i(TAG, "fake: guest hooks instr=" + sInstr + " ams=" + sAms
+                + " pms=" + sPms + " hcb=" + sHcb);
+    }
+
+    /**
+     * signature เดิมของ repo (เรียกจาก GuestLauncher) — คงไว้เพื่อไม่ให้ call site เดิมพัง
+     * ตอนนี้ไม่ต้องใช้ pkg/loader แล้ว เพราะ hook เก็บ loader จาก GuestIdentity แบบ lazy
+     */
     public static boolean install(Context host, String targetPkg, ClassLoader guestLoader) {
-        if (sInstalled) return true;
-        try {
-            FakeCore.init();
+        installForProcess(host);
+        return sGuestInstalled ? (sInstr || sAms || sHcb) : sAms;
+    }
 
-            Class<?> atCls = Class.forName("android.app.ActivityThread");
-            Method cur = atCls.getDeclaredMethod("currentActivityThread");
-            cur.setAccessible(true);
-            Object at = cur.invoke(null);
-            if (at == null) {
-                android.util.Log.w(TAG, "fake: ActivityThread = null (ติดตั้ง hook ไม่ได้)");
-                return false;
-            }
+    /** สถานะสำหรับ UI/log — พิสูจน์ว่า hook ติดจริง ไม่ใช่สมมติ */
+    public static String status() {
+        return "proc=" + (sGuestInstalled ? "guest" : (sMainInstalled ? "main" : "none"))
+                + " instr=" + sInstr + " ams=" + sAms + " pms=" + sPms + " hcb=" + sHcb
+                + " hiddenApi=" + sHiddenApiTried;
+    }
 
-            // 1) Instrumentation
-            boolean instr = false;
-            try {
-                Method getInstr = atCls.getMethod("getInstrumentation");
-                android.app.Instrumentation baseInstr =
-                        (android.app.Instrumentation) getInstr.invoke(at);
-                AppInstrumentation appInstr = new AppInstrumentation(baseInstr);
-                appInstr.setGuest(guestLoader, targetPkg);
-                Field f = atCls.getDeclaredField("mInstrumentation");
-                f.setAccessible(true);
-                f.set(at, appInstr);
-                instr = true;
-                android.util.Log.i(TAG, "fake: mInstrumentation → AppInstrumentation (base="
-                        + (baseInstr != null ? baseInstr.getClass().getSimpleName() : "null") + ")");
-            } catch (Throwable t) {
-                android.util.Log.w(TAG, "fake: instrumentation swap failed: " + t);
-            }
-
-            // 2) IActivityManager
-            boolean ams = IActivityManagerProxy.install(targetPkg);
-
-            // 3) IPackageManager (ใช้ path sandbox ของ guest)
-            boolean pms = false;
-            try {
-                String apk = com.aether.container.SandboxStore.guestApk(host, targetPkg).getAbsolutePath();
-                String data = com.aether.container.SandboxStore.guestUserDataDir(host, targetPkg).getAbsolutePath();
-                String ver = "?";
-                org.json.JSONObject conf = com.aether.container.SandboxStore.readPackageSetting(host, targetPkg);
-                if (conf != null) ver = conf.optString("versionName", "?");
-                pms = IPackageManagerProxy.install(targetPkg, apk, data, ver);
-            } catch (Throwable t) {
-                android.util.Log.w(TAG, "fake: pms install failed: " + t);
-            }
-
-            // 4) mH callback (logger)
-            boolean hcb = false;
-            try {
-                Field f = atCls.getDeclaredField("mH");
-                f.setAccessible(true);
-                Handler h = (Handler) f.get(at);
-                if (h != null) {
-                    Field cbField = null;
-                    for (Class<?> c = h.getClass(); c != null; c = c.getSuperclass()) {
-                        try {
-                            cbField = c.getDeclaredField("mCallback");
-                            break;
-                        } catch (NoSuchFieldException ignored) {
-                        }
-                    }
-                    if (cbField != null) {
-                        cbField.setAccessible(true);
-                        cbField.set(h, new HCallbackLogger());
-                        hcb = true;
-                        android.util.Log.i(TAG, "fake: HCallback attached (mH.mCallback)");
-                    }
-                }
-            } catch (Throwable t) {
-                android.util.Log.w(TAG, "fake: mH callback failed: " + t);
-            }
-
-            sInstalled = instr && ams && pms;
-            android.util.Log.i(TAG, "fake: HookManager.install instr=" + instr
-                    + " ams=" + ams + " pms=" + pms + " hcb=" + hcb
-                    + " target=" + targetPkg + " done=" + sInstalled);
-            return sInstalled;
-        } catch (Throwable t) {
-            android.util.Log.w(TAG, "fake: HookManager.install failed: " + t);
-            return false;
-        }
+    /** proxy class ที่ใช้เป็น stub ของ process นี้ (สำหรับ log/UI) */
+    public static String stubForCurrentProcess(Context ctx) {
+        return ProxyActivity.P0.class.getName();
     }
 }
